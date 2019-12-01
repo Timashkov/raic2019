@@ -24,7 +24,7 @@ class MyStrategy {
         var nearestHealthPack: LootBox? = null
         for (lootBox in game.lootBoxes) {
             val item = lootBox.item
-            if (item is Item.Weapon && item.weaponType == WeaponType.ROCKET_LAUNCHER) {
+            if (item is Item.Weapon && item.weaponType == WeaponType.ASSAULT_RIFLE) {
                 if (nearestWeapon == null || distanceSqr(unit.position,
                                 lootBox.position) < distanceSqr(unit.position, nearestWeapon.position)) {
                     nearestWeapon = lootBox
@@ -58,7 +58,7 @@ class MyStrategy {
             debug.draw(CustomData.Log("Enemy pos: ${nearestEnemy.position} , aim: $aim"))
         }
 
-        var jump = targetPos.y > unit.position.y;
+        var jump = targetPos.y > unit.position.y
         if (targetPos.x > unit.position.x && game.level.tiles[(unit.position.x + 1).toInt()][(unit.position.y).toInt()] == Tile.WALL) {
             jump = true
         }
@@ -108,14 +108,11 @@ class MyStrategy {
         val indexTop = ceil(yt).toInt()
         val indexBottom = floor(yb).toInt()
 
-        var collision = false
-
         for (i in indexLeft..indexRight) {
             for (j in indexBottom..indexTop) {
-                collision = (game.level.tiles[i][j].discriminant == Tile.WALL.discriminant) &&
+                if ((game.level.tiles[i][j].discriminant == Tile.WALL.discriminant) &&
                         (floor(xl) == floor(xr) || floor(yt) == floor(yb) || tileCollision(i, j, xl, xr, yb, yt))
-
-                if (collision)
+                )
                     return false
             }
         }
