@@ -33,6 +33,10 @@ class Weapon {
         this.lastFireTick = lastFireTick
     }
 
+    override fun toString(): String {
+        return "M:$magazine, ws:$wasShooting, spr:$spread, ft: $fireTimer, la:$lastAngle, lft:$lastFireTick"
+    }
+
     companion object {
         @Throws(java.io.IOException::class)
         fun readFrom(stream: java.io.InputStream): Weapon {
