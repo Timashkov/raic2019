@@ -4,15 +4,25 @@ import util.StreamUtil
 
 class Game {
     var currentTick: Int = 0
-    lateinit var properties: model.Properties
-    lateinit var level: model.Level
-    lateinit var players: Array<model.Player>
-    lateinit var units: Array<model.Unit>
-    lateinit var bullets: Array<model.Bullet>
-    lateinit var mines: Array<model.Mine>
-    lateinit var lootBoxes: Array<model.LootBox>
-    constructor() {}
-    constructor(currentTick: Int, properties: model.Properties, level: model.Level, players: Array<model.Player>, units: Array<model.Unit>, bullets: Array<model.Bullet>, mines: Array<model.Mine>, lootBoxes: Array<model.LootBox>) {
+    lateinit var properties: Properties
+    lateinit var level: Level
+    lateinit var players: Array<Player>
+    lateinit var units: Array<Unit>
+    lateinit var bullets: Array<Bullet>
+    lateinit var mines: Array<Mine>
+    lateinit var lootBoxes: Array<LootBox>
+
+    constructor()
+    constructor(
+        currentTick: Int,
+        properties: Properties,
+        level: Level,
+        players: Array<Player>,
+        units: Array<Unit>,
+        bullets: Array<Bullet>,
+        mines: Array<Mine>,
+        lootBoxes: Array<LootBox>
+    ) {
         this.currentTick = currentTick
         this.properties = properties
         this.level = level
@@ -22,41 +32,38 @@ class Game {
         this.mines = mines
         this.lootBoxes = lootBoxes
     }
+
     companion object {
         @Throws(java.io.IOException::class)
         fun readFrom(stream: java.io.InputStream): Game {
             val result = Game()
             result.currentTick = StreamUtil.readInt(stream)
-            result.properties = model.Properties.readFrom(stream)
-            result.level = model.Level.readFrom(stream)
-            result.players = Array(StreamUtil.readInt(stream), {
-                var playersValue: model.Player
-                playersValue = model.Player.readFrom(stream)
+            result.properties = Properties.readFrom(stream)
+            result.level = Level.readFrom(stream)
+            result.players = Array(StreamUtil.readInt(stream)) {
+                val playersValue: Player = Player.readFrom(stream)
                 playersValue
-            })
-            result.units = Array(StreamUtil.readInt(stream), {
-                var unitsValue: model.Unit
-                unitsValue = model.Unit.readFrom(stream)
+            }
+            result.units = Array(StreamUtil.readInt(stream)) {
+                val unitsValue: Unit = Unit.readFrom(stream)
                 unitsValue
-            })
-            result.bullets = Array(StreamUtil.readInt(stream), {
-                var bulletsValue: model.Bullet
-                bulletsValue = model.Bullet.readFrom(stream)
+            }
+            result.bullets = Array(StreamUtil.readInt(stream)) {
+                val bulletsValue: Bullet = Bullet.readFrom(stream)
                 bulletsValue
-            })
-            result.mines = Array(StreamUtil.readInt(stream), {
-                var minesValue: model.Mine
-                minesValue = model.Mine.readFrom(stream)
+            }
+            result.mines = Array(StreamUtil.readInt(stream)) {
+                val minesValue: Mine = Mine.readFrom(stream)
                 minesValue
-            })
-            result.lootBoxes = Array(StreamUtil.readInt(stream), {
-                var lootBoxesValue: model.LootBox
-                lootBoxesValue = model.LootBox.readFrom(stream)
+            }
+            result.lootBoxes = Array(StreamUtil.readInt(stream)) {
+                val lootBoxesValue: LootBox = LootBox.readFrom(stream)
                 lootBoxesValue
-            })
+            }
             return result
         }
     }
+
     @Throws(java.io.IOException::class)
     fun writeTo(stream: java.io.OutputStream) {
         StreamUtil.writeInt(stream, currentTick)

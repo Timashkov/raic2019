@@ -12,8 +12,19 @@ class WeaponParams {
     var aimSpeed: Double = 0.0
     lateinit var bullet: model.BulletParams
     var explosion: model.ExplosionParams? = null
+
     constructor() {}
-    constructor(magazineSize: Int, fireRate: Double, reloadTime: Double, minSpread: Double, maxSpread: Double, recoil: Double, aimSpeed: Double, bullet: model.BulletParams, explosion: model.ExplosionParams?) {
+    constructor(
+        magazineSize: Int,
+        fireRate: Double,
+        reloadTime: Double,
+        minSpread: Double,
+        maxSpread: Double,
+        recoil: Double,
+        aimSpeed: Double,
+        bullet: model.BulletParams,
+        explosion: model.ExplosionParams?
+    ) {
         this.magazineSize = magazineSize
         this.fireRate = fireRate
         this.reloadTime = reloadTime
@@ -24,6 +35,7 @@ class WeaponParams {
         this.bullet = bullet
         this.explosion = explosion
     }
+
     companion object {
         @Throws(java.io.IOException::class)
         fun readFrom(stream: java.io.InputStream): WeaponParams {
@@ -44,6 +56,7 @@ class WeaponParams {
             return result
         }
     }
+
     @Throws(java.io.IOException::class)
     fun writeTo(stream: java.io.OutputStream) {
         StreamUtil.writeInt(stream, magazineSize)

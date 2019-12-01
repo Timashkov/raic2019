@@ -11,8 +11,18 @@ class Weapon {
     var fireTimer: Double? = null
     var lastAngle: Double? = null
     var lastFireTick: Int? = null
+
     constructor() {}
-    constructor(typ: model.WeaponType, params: model.WeaponParams, magazine: Int, wasShooting: Boolean, spread: Double, fireTimer: Double?, lastAngle: Double?, lastFireTick: Int?) {
+    constructor(
+        typ: model.WeaponType,
+        params: model.WeaponParams,
+        magazine: Int,
+        wasShooting: Boolean,
+        spread: Double,
+        fireTimer: Double?,
+        lastAngle: Double?,
+        lastFireTick: Int?
+    ) {
         this.typ = typ
         this.params = params
         this.magazine = magazine
@@ -22,15 +32,16 @@ class Weapon {
         this.lastAngle = lastAngle
         this.lastFireTick = lastFireTick
     }
+
     companion object {
         @Throws(java.io.IOException::class)
         fun readFrom(stream: java.io.InputStream): Weapon {
             val result = Weapon()
             when (StreamUtil.readInt(stream)) {
-            0 ->result.typ = model.WeaponType.PISTOL
-            1 ->result.typ = model.WeaponType.ASSAULT_RIFLE
-            2 ->result.typ = model.WeaponType.ROCKET_LAUNCHER
-            else -> throw java.io.IOException("Unexpected discriminant value")
+                0 -> result.typ = model.WeaponType.PISTOL
+                1 -> result.typ = model.WeaponType.ASSAULT_RIFLE
+                2 -> result.typ = model.WeaponType.ROCKET_LAUNCHER
+                else -> throw java.io.IOException("Unexpected discriminant value")
             }
             result.params = model.WeaponParams.readFrom(stream)
             result.magazine = StreamUtil.readInt(stream)
@@ -54,6 +65,7 @@ class Weapon {
             return result
         }
     }
+
     @Throws(java.io.IOException::class)
     fun writeTo(stream: java.io.OutputStream) {
         StreamUtil.writeInt(stream, typ.discriminant)

@@ -10,8 +10,17 @@ class UnitAction {
     var shoot: Boolean = false
     var swapWeapon: Boolean = false
     var plantMine: Boolean = false
+
     constructor() {}
-    constructor(velocity: Double, jump: Boolean, jumpDown: Boolean, aim: model.Vec2Double, shoot: Boolean, swapWeapon: Boolean, plantMine: Boolean) {
+    constructor(
+        velocity: Double,
+        jump: Boolean,
+        jumpDown: Boolean,
+        aim: model.Vec2Double,
+        shoot: Boolean,
+        swapWeapon: Boolean,
+        plantMine: Boolean
+    ) {
         this.velocity = velocity
         this.jump = jump
         this.jumpDown = jumpDown
@@ -20,6 +29,7 @@ class UnitAction {
         this.swapWeapon = swapWeapon
         this.plantMine = plantMine
     }
+
     companion object {
         @Throws(java.io.IOException::class)
         fun readFrom(stream: java.io.InputStream): UnitAction {
@@ -34,6 +44,7 @@ class UnitAction {
             return result
         }
     }
+
     @Throws(java.io.IOException::class)
     fun writeTo(stream: java.io.OutputStream) {
         StreamUtil.writeDouble(stream, velocity)

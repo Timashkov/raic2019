@@ -14,7 +14,8 @@ class MyStrategy {
         }
         var nearestWeapon: LootBox? = null
         for (lootBox in game.lootBoxes) {
-            if (lootBox.item is Item.Weapon) {
+            val item = lootBox.item
+            if (item is Item.Weapon && item.weaponType == WeaponType.ROCKET_LAUNCHER) {
                 if (nearestWeapon == null || distanceSqr(unit.position,
                                 lootBox.position) < distanceSqr(unit.position, nearestWeapon.position)) {
                     nearestWeapon = lootBox
@@ -32,6 +33,7 @@ class MyStrategy {
         if (nearestEnemy != null) {
             aim = Vec2Double(nearestEnemy.position.x - unit.position.x,
                     nearestEnemy.position.y - unit.position.y)
+            debug.draw(CustomData.Log("Enemy pos: ${nearestEnemy.position} , aim: $aim"))
         }
         var jump = targetPos.y > unit.position.y;
         if (targetPos.x > unit.position.x && game.level.tiles[(unit.position.x + 1).toInt()][(unit.position.y).toInt()] == Tile.WALL) {

@@ -24,4 +24,8 @@ class Vec2Double {
         StreamUtil.writeDouble(stream, x)
         StreamUtil.writeDouble(stream, y)
     }
+
+    override fun toString(): String {
+        return "( $x : $y )"
+    }
 }

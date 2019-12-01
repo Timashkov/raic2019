@@ -5,11 +5,13 @@ import util.StreamUtil
 class ColoredVertex {
     lateinit var position: model.Vec2Float
     lateinit var color: model.ColorFloat
+
     constructor() {}
     constructor(position: model.Vec2Float, color: model.ColorFloat) {
         this.position = position
         this.color = color
     }
+
     companion object {
         @Throws(java.io.IOException::class)
         fun readFrom(stream: java.io.InputStream): ColoredVertex {
@@ -19,6 +21,7 @@ class ColoredVertex {
             return result
         }
     }
+
     @Throws(java.io.IOException::class)
     fun writeTo(stream: java.io.OutputStream) {
         position.writeTo(stream)

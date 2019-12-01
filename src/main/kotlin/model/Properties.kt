@@ -24,8 +24,31 @@ class Properties {
     var mineTriggerTime: Double = 0.0
     var mineTriggerRadius: Double = 0.0
     var killScore: Int = 0
+
     constructor() {}
-    constructor(maxTickCount: Int, teamSize: Int, ticksPerSecond: Double, updatesPerTick: Int, lootBoxSize: model.Vec2Double, unitSize: model.Vec2Double, unitMaxHorizontalSpeed: Double, unitFallSpeed: Double, unitJumpTime: Double, unitJumpSpeed: Double, jumpPadJumpTime: Double, jumpPadJumpSpeed: Double, unitMaxHealth: Int, healthPackHealth: Int, weaponParams: MutableMap<model.WeaponType, model.WeaponParams>, mineSize: model.Vec2Double, mineExplosionParams: model.ExplosionParams, minePrepareTime: Double, mineTriggerTime: Double, mineTriggerRadius: Double, killScore: Int) {
+    constructor(
+        maxTickCount: Int,
+        teamSize: Int,
+        ticksPerSecond: Double,
+        updatesPerTick: Int,
+        lootBoxSize: model.Vec2Double,
+        unitSize: model.Vec2Double,
+        unitMaxHorizontalSpeed: Double,
+        unitFallSpeed: Double,
+        unitJumpTime: Double,
+        unitJumpSpeed: Double,
+        jumpPadJumpTime: Double,
+        jumpPadJumpSpeed: Double,
+        unitMaxHealth: Int,
+        healthPackHealth: Int,
+        weaponParams: MutableMap<model.WeaponType, model.WeaponParams>,
+        mineSize: model.Vec2Double,
+        mineExplosionParams: model.ExplosionParams,
+        minePrepareTime: Double,
+        mineTriggerTime: Double,
+        mineTriggerRadius: Double,
+        killScore: Int
+    ) {
         this.maxTickCount = maxTickCount
         this.teamSize = teamSize
         this.ticksPerSecond = ticksPerSecond
@@ -48,6 +71,7 @@ class Properties {
         this.mineTriggerRadius = mineTriggerRadius
         this.killScore = killScore
     }
+
     companion object {
         @Throws(java.io.IOException::class)
         fun readFrom(stream: java.io.InputStream): Properties {
@@ -71,10 +95,10 @@ class Properties {
             for (i in 0 until weaponParamsSize) {
                 var weaponParamsKey: model.WeaponType
                 when (StreamUtil.readInt(stream)) {
-                0 ->weaponParamsKey = model.WeaponType.PISTOL
-                1 ->weaponParamsKey = model.WeaponType.ASSAULT_RIFLE
-                2 ->weaponParamsKey = model.WeaponType.ROCKET_LAUNCHER
-                else -> throw java.io.IOException("Unexpected discriminant value")
+                    0 -> weaponParamsKey = model.WeaponType.PISTOL
+                    1 -> weaponParamsKey = model.WeaponType.ASSAULT_RIFLE
+                    2 -> weaponParamsKey = model.WeaponType.ROCKET_LAUNCHER
+                    else -> throw java.io.IOException("Unexpected discriminant value")
                 }
                 var weaponParamsValue: model.WeaponParams
                 weaponParamsValue = model.WeaponParams.readFrom(stream)
@@ -89,6 +113,7 @@ class Properties {
             return result
         }
     }
+
     @Throws(java.io.IOException::class)
     fun writeTo(stream: java.io.OutputStream) {
         StreamUtil.writeInt(stream, maxTickCount)

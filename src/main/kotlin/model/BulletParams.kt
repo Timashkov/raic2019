@@ -6,12 +6,14 @@ class BulletParams {
     var speed: Double = 0.0
     var size: Double = 0.0
     var damage: Int = 0
+
     constructor() {}
     constructor(speed: Double, size: Double, damage: Int) {
         this.speed = speed
         this.size = size
         this.damage = damage
     }
+
     companion object {
         @Throws(java.io.IOException::class)
         fun readFrom(stream: java.io.InputStream): BulletParams {
@@ -22,6 +24,7 @@ class BulletParams {
             return result
         }
     }
+
     @Throws(java.io.IOException::class)
     fun writeTo(stream: java.io.OutputStream) {
         StreamUtil.writeDouble(stream, speed)

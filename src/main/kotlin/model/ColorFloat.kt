@@ -7,6 +7,7 @@ class ColorFloat {
     var g: Float = 0.0f
     var b: Float = 0.0f
     var a: Float = 0.0f
+
     constructor() {}
     constructor(r: Float, g: Float, b: Float, a: Float) {
         this.r = r
@@ -14,6 +15,7 @@ class ColorFloat {
         this.b = b
         this.a = a
     }
+
     companion object {
         @Throws(java.io.IOException::class)
         fun readFrom(stream: java.io.InputStream): ColorFloat {
@@ -25,6 +27,7 @@ class ColorFloat {
             return result
         }
     }
+
     @Throws(java.io.IOException::class)
     fun writeTo(stream: java.io.OutputStream) {
         StreamUtil.writeFloat(stream, r)

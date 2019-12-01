@@ -5,6 +5,7 @@ import util.StreamUtil
 abstract class PlayerMessageGame {
     @Throws(java.io.IOException::class)
     abstract fun writeTo(stream: java.io.OutputStream)
+
     companion object {
         @Throws(java.io.IOException::class)
         fun readFrom(stream: java.io.InputStream): PlayerMessageGame {
@@ -18,10 +19,12 @@ abstract class PlayerMessageGame {
 
     class CustomDataMessage : PlayerMessageGame {
         lateinit var data: model.CustomData
-        constructor() {}
+
+        constructor()
         constructor(data: model.CustomData) {
             this.data = data
         }
+
         companion object {
             val TAG = 0
             @Throws(java.io.IOException::class)
@@ -31,6 +34,7 @@ abstract class PlayerMessageGame {
                 return result
             }
         }
+
         @Throws(java.io.IOException::class)
         override fun writeTo(stream: java.io.OutputStream) {
             StreamUtil.writeInt(stream, TAG)
@@ -40,10 +44,12 @@ abstract class PlayerMessageGame {
 
     class ActionMessage : PlayerMessageGame {
         lateinit var action: MutableMap<Int, model.UnitAction>
-        constructor() {}
+
+        constructor()
         constructor(action: MutableMap<Int, model.UnitAction>) {
             this.action = action
         }
+
         companion object {
             val TAG = 1
             @Throws(java.io.IOException::class)
@@ -61,6 +67,7 @@ abstract class PlayerMessageGame {
                 return result
             }
         }
+
         @Throws(java.io.IOException::class)
         override fun writeTo(stream: java.io.OutputStream) {
             StreamUtil.writeInt(stream, TAG)
