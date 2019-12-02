@@ -12,13 +12,14 @@ class MyStrategy {
     }
 
     fun getAction(unit: model.Unit, game: Game, debug: Debug): UnitAction {
+        print("Tick: ${game.currentTick}")
         var nearestEnemy: model.Unit? = null
         for (other in game.units) {
             if (other.playerId != unit.playerId) {
                 if (nearestEnemy == null || distanceSqr(
-                        unit.position,
-                        other.position
-                    ) < distanceSqr(unit.position, nearestEnemy.position)
+                                unit.position,
+                                other.position
+                        ) < distanceSqr(unit.position, nearestEnemy.position)
                 ) {
                     nearestEnemy = other
                 }
@@ -30,18 +31,18 @@ class MyStrategy {
             val item = lootBox.item
             if (item is Item.Weapon && item.weaponType == WeaponType.ASSAULT_RIFLE) {
                 if (nearestWeapon == null || distanceSqr(
-                        unit.position,
-                        lootBox.position
-                    ) < distanceSqr(unit.position, nearestWeapon.position)
+                                unit.position,
+                                lootBox.position
+                        ) < distanceSqr(unit.position, nearestWeapon.position)
                 ) {
                     nearestWeapon = lootBox
                 }
             }
             if (lootBox.item is Item.HealthPack) {
                 if (nearestHealthPack == null || distanceSqr(unit.position, lootBox.position) < distanceSqr(
-                        unit
-                            .position, nearestHealthPack.position
-                    )
+                                unit
+                                        .position, nearestHealthPack.position
+                        )
                 ) {
                     nearestHealthPack = lootBox
                 }
@@ -64,22 +65,22 @@ class MyStrategy {
         var aim = Vec2Double(0.0, 0.0)
         if (nearestEnemy != null) {
             aim = Vec2Double(
-                nearestEnemy.position.x - unit.position.x,
-                nearestEnemy.position.y - unit.position.y
+                    nearestEnemy.position.x - unit.position.x,
+                    nearestEnemy.position.y - unit.position.y
             )
             debug.draw(
-                CustomData.Line(
-                    Vec2Float(
-                        unit.position.x.toFloat(),
-                        (unit.position.y + unit.size.y * 0.5).toFloat()
-                    ),
-                    Vec2Float(
-                        nearestEnemy.position.x.toFloat(),
-                        (nearestEnemy.position.y + nearestEnemy.size.y * 0.5).toFloat()
-                    ),
-                    0.1f,
-                    ColorFloat(10f, 10f, 10f, 10f)
-                )
+                    CustomData.Line(
+                            Vec2Float(
+                                    unit.position.x.toFloat(),
+                                    (unit.position.y + unit.size.y * 0.5).toFloat()
+                            ),
+                            Vec2Float(
+                                    nearestEnemy.position.x.toFloat(),
+                                    (nearestEnemy.position.y + nearestEnemy.size.y * 0.5).toFloat()
+                            ),
+                            0.1f,
+                            ColorFloat(10f, 10f, 10f, 10f)
+                    )
             )
         }
 
@@ -104,6 +105,7 @@ class MyStrategy {
         }
         action.swapWeapon = false
         action.plantMine = false
+        println()
         return action
     }
 
@@ -133,56 +135,110 @@ class MyStrategy {
         val indexBottom = yb.toInt()
         val indexTop = yt.toInt()
 
-        /*debug.draw(
-                CustomData.Rect(
-                    Vec2Float(
-                        tileXIndex.toFloat(),
-                        tileYIndex.toFloat()
-                    ),
-                    Vec2Float(
-                        1f,
-                        1f
-                    ),
-                    ColorFloat(255f, 0f, 0f, 110f)
-                )
-            )*/
-
-        for (i in indexLeft..indexRight) {
-            for (j in indexBottom..indexTop) {
-                if (game.level.tiles[i][j].discriminant == Tile.WALL.discriminant) {
-                    if (xl.toInt() == xr.toInt() || yt.toInt() == yb.toInt()) {
-                        debug.draw(CustomData.Log("me: ${unit.position} enemy:${nearestEnemy.position}"))
-                        debug.draw(CustomData.Log("${xl.toInt()} == ${xr.toInt()}  ${yt.toInt()} == ${yb.toInt()}"))
-
-                        return false
-                    } else {
-                        if (directrixTileCollision(
-                                i,
-                                j,
-                                xl,
-                                xr,
-                                yb,
-                                yt,
-                                debug
-                            )
-                        ) {
-                            debug.draw(
-                                CustomData.Rect(
-                                    Vec2Float(
-                                        i.toFloat(),
-                                        j.toFloat()
-                                    ),
-                                    Vec2Float(
-                                        1f,
-                                        1f
-                                    ),
-                                    ColorFloat(0f, 0f, 255f, 110f)
-                                )
-                            )
+        if (unit.position.x > nearestEnemy.position.x) {
+            for (i in indexRight downTo indexLeft) {
+                for (j in indexBottom..indexTop) {
+                    if (game.level.tiles[i][j].discriminant == Tile.WALL.discriminant) {
+                        if (xl.toInt() == xr.toInt() || yt.toInt() == yb.toInt()) {
                             debug.draw(CustomData.Log("me: ${unit.position} enemy:${nearestEnemy.position}"))
                             debug.draw(CustomData.Log("${xl.toInt()} == ${xr.toInt()}  ${yt.toInt()} == ${yb.toInt()}"))
-
+                            debug.draw(
+                                    CustomData.Rect(
+                                            Vec2Float(
+                                                    i.toFloat(),
+                                                    j.toFloat()
+                                            ),
+                                            Vec2Float(
+                                                    1f,
+                                                    1f
+                                            ),
+                                            ColorFloat(0f, 155f, 155f, 110f)
+                                    )
+                            )
                             return false
+                        } else {
+                            if (directrixTileCollision(
+                                            i,
+                                            j,
+                                            unit.position.x,
+                                            nearestEnemy.position.x,
+                                            unit.position.y + unit.size.y * 0.5,
+                                            nearestEnemy.position.y + nearestEnemy.size.y * 0.5
+                                    )
+                            ) {
+                                debug.draw(
+                                        CustomData.Rect(
+                                                Vec2Float(
+                                                        i.toFloat(),
+                                                        j.toFloat()
+                                                ),
+                                                Vec2Float(
+                                                        1f,
+                                                        1f
+                                                ),
+                                                ColorFloat(0f, 0f, 255f, 110f)
+                                        )
+                                )
+                                debug.draw(CustomData.Log("me: ${unit.position} enemy:${nearestEnemy.position}"))
+                                debug.draw(CustomData.Log("${xl.toInt()} == ${xr.toInt()}  ${yt.toInt()} == ${yb.toInt()}"))
+
+                                return false
+                            }
+                        }
+                    }
+                }
+            }
+
+        } else {
+
+            for (i in indexLeft..indexRight) {
+                for (j in indexBottom..indexTop) {
+                    if (game.level.tiles[i][j].discriminant == Tile.WALL.discriminant) {
+                        if (xl.toInt() == xr.toInt() || yt.toInt() == yb.toInt()) {
+                            debug.draw(CustomData.Log("me: ${unit.position} enemy:${nearestEnemy.position}"))
+                            debug.draw(CustomData.Log("${xl.toInt()} == ${xr.toInt()}  ${yt.toInt()} == ${yb.toInt()}"))
+                            debug.draw(
+                                    CustomData.Rect(
+                                            Vec2Float(
+                                                    i.toFloat(),
+                                                    j.toFloat()
+                                            ),
+                                            Vec2Float(
+                                                    1f,
+                                                    1f
+                                            ),
+                                            ColorFloat(0f, 155f, 155f, 110f)
+                                    )
+                            )
+                            return false
+                        } else {
+                            if (directrixTileCollision(
+                                            i,
+                                            j,
+                                            unit.position.x,
+                                            nearestEnemy.position.x,
+                                            unit.position.y + unit.size.y * 0.5,
+                                            nearestEnemy.position.y + nearestEnemy.size.y * 0.5
+                                    )
+                            ) {
+                                debug.draw(
+                                        CustomData.Rect(
+                                                Vec2Float(
+                                                        i.toFloat(),
+                                                        j.toFloat()
+                                                ),
+                                                Vec2Float(
+                                                        1f,
+                                                        1f
+                                                ),
+                                                ColorFloat(0f, 0f, 255f, 110f)
+                                        )
+                                )
+                                debug.draw(CustomData.Log("me: ${unit.position} enemy:${nearestEnemy.position}"))
+                                debug.draw(CustomData.Log("${xl.toInt()} == ${xr.toInt()}  ${yt.toInt()} == ${yb.toInt()}"))
+
+                                return false
+                            }
                         }
                     }
                 }
@@ -192,31 +248,29 @@ class MyStrategy {
     }
 
     private fun directrixTileCollision(
-        tileXIndex: Int,
-        tileYIndex: Int,
-        xl: Double,
-        xr: Double,
-        yb: Double,
-        yt: Double,
-        debug: Debug
+            tileXIndex: Int,
+            tileYIndex: Int,
+            x1: Double,
+            x2: Double,
+            y1: Double,
+            y2: Double
     ):
             Boolean {
 
+        val first = y1 - y2
+        val second = y2 * x1 - y1 * x2
+        val third = x1 - x2
 
-        val y0 = (tileXIndex * (yb - yt) + yt * xl - yb * xr) / (xl - xr)
-        if (y0 < tileYIndex + 1 && y0 > tileYIndex) {
-            debug.draw(CustomData.Log("== $xl : $xr : $yb : $yt"))
-            debug.draw(CustomData.Log(">>>${tileXIndex} : ${y0}"))
+        val yl = (tileXIndex * first + second) / third
+        if (yl < tileYIndex + 1 && yl > tileYIndex) {
             return true
         }
 
-        val y1 = ((tileXIndex + 1) * (yb - yt) + yt * xl - yb * xr) / (xl - xr)
-        if (y1 < tileYIndex + 1 && y1 > tileYIndex) {
-            debug.draw(CustomData.Log("== $xl : $xr : $yb : $yt"))
-            debug.draw(CustomData.Log("<<<${tileXIndex + 1} : ${y1}"))
-
+        val yr = ((tileXIndex + 1) * first + second) / third
+        if (yr < tileYIndex + 1 && yr > tileYIndex) {
             return true
         }
+
         return false
     }
 
