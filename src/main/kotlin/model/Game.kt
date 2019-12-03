@@ -4,24 +4,24 @@ import util.StreamUtil
 
 class Game {
     var currentTick: Int = 0
-    lateinit var properties: Properties
-    lateinit var level: Level
-    lateinit var players: Array<Player>
-    lateinit var units: Array<Unit>
-    lateinit var bullets: Array<Bullet>
-    lateinit var mines: Array<Mine>
-    lateinit var lootBoxes: Array<LootBox>
+    lateinit var properties: model.Properties
+    lateinit var level: model.Level
+    lateinit var players: Array<model.Player>
+    lateinit var units: Array<model.Unit>
+    lateinit var bullets: Array<model.Bullet>
+    lateinit var mines: Array<model.Mine>
+    lateinit var lootBoxes: Array<model.LootBox>
 
-    constructor()
+    constructor() {}
     constructor(
         currentTick: Int,
-        properties: Properties,
-        level: Level,
-        players: Array<Player>,
-        units: Array<Unit>,
-        bullets: Array<Bullet>,
-        mines: Array<Mine>,
-        lootBoxes: Array<LootBox>
+        properties: model.Properties,
+        level: model.Level,
+        players: Array<model.Player>,
+        units: Array<model.Unit>,
+        bullets: Array<model.Bullet>,
+        mines: Array<model.Mine>,
+        lootBoxes: Array<model.LootBox>
     ) {
         this.currentTick = currentTick
         this.properties = properties
@@ -38,26 +38,26 @@ class Game {
         fun readFrom(stream: java.io.InputStream): Game {
             val result = Game()
             result.currentTick = StreamUtil.readInt(stream)
-            result.properties = Properties.readFrom(stream)
-            result.level = Level.readFrom(stream)
+            result.properties = model.Properties.readFrom(stream)
+            result.level = model.Level.readFrom(stream)
             result.players = Array(StreamUtil.readInt(stream)) {
-                val playersValue: Player = Player.readFrom(stream)
+                val playersValue: model.Player = model.Player.readFrom(stream)
                 playersValue
             }
             result.units = Array(StreamUtil.readInt(stream)) {
-                val unitsValue: Unit = Unit.readFrom(stream)
+                val unitsValue: model.Unit = model.Unit.readFrom(stream)
                 unitsValue
             }
             result.bullets = Array(StreamUtil.readInt(stream)) {
-                val bulletsValue: Bullet = Bullet.readFrom(stream)
+                val bulletsValue: model.Bullet = model.Bullet.readFrom(stream)
                 bulletsValue
             }
             result.mines = Array(StreamUtil.readInt(stream)) {
-                val minesValue: Mine = Mine.readFrom(stream)
+                val minesValue: model.Mine = model.Mine.readFrom(stream)
                 minesValue
             }
             result.lootBoxes = Array(StreamUtil.readInt(stream)) {
-                val lootBoxesValue: LootBox = LootBox.readFrom(stream)
+                val lootBoxesValue: model.LootBox = model.LootBox.readFrom(stream)
                 lootBoxesValue
             }
             return result

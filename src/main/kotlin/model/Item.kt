@@ -5,6 +5,7 @@ import util.StreamUtil
 abstract class Item {
     @Throws(java.io.IOException::class)
     abstract fun writeTo(stream: java.io.OutputStream)
+
     companion object {
         @Throws(java.io.IOException::class)
         fun readFrom(stream: java.io.InputStream): Item {
@@ -19,12 +20,14 @@ abstract class Item {
 
     class HealthPack : Item {
         var health: Int = 0
+
         constructor() {}
         constructor(health: Int) {
             this.health = health
         }
+
         companion object {
-            const val TAG = 0
+            val TAG = 0
             @Throws(java.io.IOException::class)
             fun readFrom(stream: java.io.InputStream): HealthPack {
                 val result = HealthPack()
@@ -32,6 +35,7 @@ abstract class Item {
                 return result
             }
         }
+
         @Throws(java.io.IOException::class)
         override fun writeTo(stream: java.io.OutputStream) {
             StreamUtil.writeInt(stream, TAG)
@@ -40,25 +44,28 @@ abstract class Item {
     }
 
     class Weapon : Item {
-        lateinit var weaponType: WeaponType
+        lateinit var weaponType: model.WeaponType
+
         constructor() {}
-        constructor(weaponType: WeaponType) {
+        constructor(weaponType: model.WeaponType) {
             this.weaponType = weaponType
         }
+
         companion object {
-            const val TAG = 1
+            val TAG = 1
             @Throws(java.io.IOException::class)
             fun readFrom(stream: java.io.InputStream): Weapon {
                 val result = Weapon()
                 when (StreamUtil.readInt(stream)) {
-                0 ->result.weaponType = WeaponType.PISTOL
-                1 ->result.weaponType = WeaponType.ASSAULT_RIFLE
-                2 ->result.weaponType = WeaponType.ROCKET_LAUNCHER
-                else -> throw java.io.IOException("Unexpected discriminant value")
+                    0 -> result.weaponType = model.WeaponType.PISTOL
+                    1 -> result.weaponType = model.WeaponType.ASSAULT_RIFLE
+                    2 -> result.weaponType = model.WeaponType.ROCKET_LAUNCHER
+                    else -> throw java.io.IOException("Unexpected discriminant value")
                 }
                 return result
             }
         }
+
         @Throws(java.io.IOException::class)
         override fun writeTo(stream: java.io.OutputStream) {
             StreamUtil.writeInt(stream, TAG)
@@ -67,17 +74,17 @@ abstract class Item {
     }
 
     class Mine : Item {
-        constructor()
+        constructor() {}
 
         companion object {
             const val TAG = 2
             @Throws(java.io.IOException::class)
             fun readFrom(stream: java.io.InputStream): Mine {
                 val result = Mine()
-
                 return result
             }
         }
+
         @Throws(java.io.IOException::class)
         override fun writeTo(stream: java.io.OutputStream) {
             StreamUtil.writeInt(stream, TAG)
