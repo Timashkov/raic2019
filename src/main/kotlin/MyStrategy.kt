@@ -14,6 +14,7 @@ class MyStrategy {
     private var boostJumpPerTick: Double = 0.0
     private var jumpPerTick: Double = 0.0
     private var maxDXPerTick: Double = 0.0
+    private var jumpTick = 0
 
     fun getAction(unit: model.Unit, game: Game, debug: Debug): UnitAction {
         var nearestEnemy: model.Unit? = null
@@ -191,18 +192,43 @@ class MyStrategy {
         }
 
         //Y prediction
+
         when {
             act.jump -> {
-                if (unit.onGround)
-                    pos.y += jumpPerTick
+                //if (jumpTick == (game.properties.unitJumpTime * game.properties.ticksPerSecond) )
+
+                pos.y += jumpPerTick
+
                 if (unit.onLadder)
                     pos.y += jumpPerTick
             }
             act.jumpDown -> {
-
+                pos.y -= jumpPerTick
+                val tileLeft = game.level.tiles[(pos.x - unit.size.x / 2).toInt()][(pos.y).toInt()]
+                val tileRight = game.level.tiles[(pos.x + unit.size.x / 2).toInt()][(pos.y).toInt()]
+                when {
+                    pos.y.toInt() >= 0 -> {
+                        if (tileLeft == Tile.WALL || tileRight == Tile.WALL) {
+                            pos.y = (pos.y.toInt() + 1).toDouble()
+                        }
+                    }
+                }
             }
             else -> {
-
+                pos.y -= jumpPerTick
+                val tileLeft = game.level.tiles[(pos.x - unit.size.x / 2).toInt()][(pos.y).toInt()]
+                val tileRight = game.level.tiles[(pos.x + unit.size.x / 2).toInt()][(pos.y).toInt()]
+                when {
+                    pos.y < 0 -> {
+                        pos.y = 0.0
+                    }
+                    pos.y.toInt() >= 0 -> {
+                        if (tileLeft in arrayOf(Tile.WALL, Tile.PLATFORM, Tile.LADDER) ||
+                                tileRight in arrayOf(Tile.WALL, Tile.PLATFORM, Tile.LADDER)) {
+                            pos.y = (pos.y.toInt() + 1).toDouble()
+                        }
+                    }
+                }
             }
         }
 
