@@ -166,17 +166,27 @@ class MyStrategy {
 //        }
 //    }
 
+
     private fun getPositionAfterAction(unit: Unit, act: UnitAction, game: Game): Vec2Double {
         val pos = Vec2Double(unit.position.x, unit.position.y)
 
-        if (act.jump) {
-            if (unit.onGround)
-                pos.y += jumpPerTick
-            if (unit.onLadder)
-                pos.y += jumpPerTick
+        //Y prediction
+        when {
+            act.jump -> {
+                if (unit.onGround)
+                    pos.y += jumpPerTick
+                if (unit.onLadder)
+                    pos.y += jumpPerTick
+            }
+            act.jumpDown -> {
+
+            }
+            else -> {
+
+            }
         }
 
-
+        //X prediction
         val requiredDx = act.velocity / game.properties.ticksPerSecond
 
         pos.x += if (abs(requiredDx) <= maxDXPerTick) requiredDx else maxDXPerTick * sign(requiredDx)
@@ -184,7 +194,8 @@ class MyStrategy {
         val checkingX = pos.x + sign(requiredDx) * unit.size.x / 2
 
         if (game.level.tiles[checkingX.toInt()][(unit.position.y).toInt()] == Tile.WALL ||
-                game.level.tiles[checkingX.toInt()][(unit.position.y).toInt() + 1] == Tile.WALL)
+                game.level.tiles[checkingX.toInt()][(unit.position.y).toInt() + 1] == Tile.WALL
+        )
             pos.x = checkingX.toInt() - sign(requiredDx) * ((if (sign(requiredDx) < 0) 1 else 0) + unit.size.x / 2)
         if (game.units.any {
                     it.id != unit.id &&
@@ -194,7 +205,6 @@ class MyStrategy {
                 }) {
             pos.x = unit.position.x
         }
-
         return pos
     }
 
