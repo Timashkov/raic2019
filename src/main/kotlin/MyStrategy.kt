@@ -14,7 +14,11 @@ class MyStrategy {
     private var boostJumpPerTick: Double = 0.0
     private var jumpPerTick: Double = 0.0
     private var maxDXPerTick: Double = 0.0
+    private var maxJumpTick = 0
+    private var boostJumpTick = 0
+    private var maxBoostJumpTick = 0
     private var jumpTick = 0
+    private var jumpAllowed = true
 
     fun getAction(unit: model.Unit, game: Game, debug: Debug): UnitAction {
         var nearestEnemy: model.Unit? = null
@@ -22,6 +26,12 @@ class MyStrategy {
         maxDXPerTick = game.properties.unitMaxHorizontalSpeed / game.properties.ticksPerSecond
         jumpPerTick = game.properties.unitJumpSpeed / game.properties.ticksPerSecond
         boostJumpPerTick = game.properties.jumpPadJumpSpeed / game.properties.ticksPerSecond
+
+        maxJumpTick = (game.properties.jumpPadJumpTime * game.properties.ticksPerSecond).toInt()
+        maxBoostJumpTick = (game.properties.jumpPadJumpTime * game.properties.ticksPerSecond).toInt()
+
+        jumpAllowed = unit.onGround
+
 
         for (other in game.units) {
             if (other.playerId != unit.playerId) {
@@ -69,7 +79,6 @@ class MyStrategy {
         }
 
 
-        debug.draw(CustomData.Log("Target pos: ${targetPos.x}:${targetPos.y}"))
         var aim = Vec2Double(0.0, 0.0)
         if (nearestEnemy != null) {
             aim = Vec2Double(
@@ -119,11 +128,12 @@ class MyStrategy {
         action.swapWeapon = false
         action.plantMine = false
 
-        debug.draw(CustomData.Log("Action: aim:${action.aim.x}:${action.aim.y} pos:${unit.position.x}:${unit
-                .position.y} targetVel ${action.velocity} jump:${action.jump} "))
+        debug.draw(CustomData.Log("Action: pos:${unit.position.x}:${unit
+                .position.y} jump:${action.jump} jumptick $jumpTick maxjumptick $maxJumpTick boostJumpTick " +
+                "$boostJumpTick maxboostjumptick $maxBoostJumpTick onGround ${unit.onGround}  jumpDown: ${action.jumpDown}"))
 
-        debug.draw(CustomData.Log("maxSp: ${game.properties.unitMaxHorizontalSpeed} maxJS:${game.properties
-                .unitJumpSpeed} jt:${game.properties.unitJumpTime}  ticksPS${game.properties.ticksPerSecond} dt:${game.properties.updatesPerTick}"))
+//        debug.draw(CustomData.Log("maxSp: ${game.properties.unitMaxHorizontalSpeed} maxJS:${game.properties
+//                .unitJumpSpeed} jt:${game.properties.unitJumpTime}  ticksPS${game.properties.ticksPerSecond} dt:${game.properties.updatesPerTick}"))
 
         val pos = getPositionAfterAction(unit, action, game)
         debug.draw(CustomData.Rect(
@@ -193,38 +203,93 @@ class MyStrategy {
 
         //Y prediction
 
-        when {
-            act.jump -> {
-                //if (jumpTick == (game.properties.unitJumpTime * game.properties.ticksPerSecond) )
+        val tileBeforeMovingLeft = game.level.tiles[(pos.x - unit.size.x / 2).toInt()][pos.y.toInt()]
+        val tileBeforeMovingRight = game.level.tiles[(pos.x + unit.size.x / 2).toInt()][pos.y.toInt()]
+        if ((tileBeforeMovingLeft == Tile.JUMP_PAD || tileBeforeMovingRight == Tile.JUMP_PAD) &&
+                (pos.y - pos.y.toInt().toDouble()) < boostJumpPerTick) {
+            boostJumpTick = 1
+            pos.y += boostJumpPerTick
+            return pos
+        }
 
+        when {
+
+            boostJumpTick in 1..maxBoostJumpTick + 1 -> {
+                pos.y += boostJumpPerTick
+                val tileBeforeMoving = game.level.tiles[(pos.x).toInt()][pos.y.toInt()]
+                if (tileBeforeMoving == Tile.LADDER) {
+                    jumpTick = 0
+                    boostJumpTick = 0
+                    return pos
+                }
+            }
+
+            act.jump &&
+                    (jumpTick in 0..maxJumpTick + 1 ||
+                            (jumpAllowed &&
+                                    (tileBeforeMovingLeft == Tile.WALL ||
+                                            tileBeforeMovingRight == Tile.WALL || tileBeforeMovingLeft == Tile
+                                            .PLATFORM || tileBeforeMovingRight == Tile.PLATFORM) &&
+                                    (pos.y - pos.y.toInt().toDouble()) < jumpPerTick) ||
+                            (tileBeforeMovingLeft == Tile.LADDER || tileBeforeMovingRight == Tile.LADDER)) -> {
                 pos.y += jumpPerTick
 
-                if (unit.onLadder)
-                    pos.y += jumpPerTick
+                if (unit.onLadder) {
+                    jumpTick = 0
+                } else {
+                    jumpTick++
+                }
             }
             act.jumpDown -> {
                 pos.y -= jumpPerTick
+                jumpTick = -1
                 val tileLeft = game.level.tiles[(pos.x - unit.size.x / 2).toInt()][(pos.y).toInt()]
                 val tileRight = game.level.tiles[(pos.x + unit.size.x / 2).toInt()][(pos.y).toInt()]
+                if (tileLeft == Tile.LADDER && tileRight in arrayOf(Tile.LADDER, Tile.EMPTY)
+                        || tileRight == Tile.LADDER && tileLeft in arrayOf(Tile.LADDER, Tile
+                                .EMPTY)) {
+                    jumpTick = 0
+                    jumpAllowed = true
+                    return pos
+                }
+
                 when {
+                    pos.y < 0 -> {
+                        pos.y = 0.0
+                        jumpAllowed = true
+                    }
                     pos.y.toInt() >= 0 -> {
                         if (tileLeft == Tile.WALL || tileRight == Tile.WALL) {
                             pos.y = (pos.y.toInt() + 1).toDouble()
+                            jumpAllowed = true
                         }
                     }
                 }
             }
             else -> {
+                jumpAllowed = false
+                jumpTick = -1
+                val tileBeforeMoving = game.level.tiles[(pos.x).toInt()][pos.y.toInt()]
+                if (tileBeforeMoving == Tile.LADDER) {
+                    jumpTick = 0
+                    jumpAllowed = true
+                    return pos
+                }
                 pos.y -= jumpPerTick
-                val tileLeft = game.level.tiles[(pos.x - unit.size.x / 2).toInt()][(pos.y).toInt()]
-                val tileRight = game.level.tiles[(pos.x + unit.size.x / 2).toInt()][(pos.y).toInt()]
+                val tileLeft = game.level.tiles[(pos.x - unit.size.x / 2).toInt()][pos.y.toInt()]
+                val tileRight = game.level.tiles[(pos.x + unit.size.x / 2).toInt()][pos.y.toInt()]
                 when {
                     pos.y < 0 -> {
+                        jumpAllowed = true
+                        jumpTick = 0
                         pos.y = 0.0
                     }
                     pos.y.toInt() >= 0 -> {
-                        if (tileLeft in arrayOf(Tile.WALL, Tile.PLATFORM, Tile.LADDER) ||
-                                tileRight in arrayOf(Tile.WALL, Tile.PLATFORM, Tile.LADDER)) {
+                        if (tileLeft in arrayOf(Tile.WALL, Tile.PLATFORM) ||
+                                tileRight in arrayOf(Tile.WALL, Tile.PLATFORM) && (pos.y - pos.y.toInt().toDouble()) <
+                                jumpPerTick) {
+                            jumpTick = 0
+                            jumpAllowed = true
                             pos.y = (pos.y.toInt() + 1).toDouble()
                         }
                     }
