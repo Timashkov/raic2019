@@ -2,7 +2,10 @@ import model.*
 import model.Unit
 import java.lang.Math.abs
 import java.lang.Math.atan2
-import kotlin.math.atan
+import java.util.*
+import java.util.concurrent.LinkedBlockingQueue
+import kotlin.collections.ArrayList
+import kotlin.collections.HashMap
 import kotlin.math.sign
 import kotlin.math.tan
 
@@ -21,6 +24,7 @@ class MyStrategy {
     private var maxBoostJumpTick = 0
     private var ticksPerSec = 0.0
     private lateinit var unitMovement: UnitMovement
+    private var pa: ProbablyAction? = null
 
     fun getAction(unit: model.Unit, game: Game, debug: Debug): UnitAction {
         var nearestEnemy: model.Unit? = null
@@ -60,28 +64,37 @@ class MyStrategy {
                 }
             }
             if (lootBox.item is Item.HealthPack) {
-                if (nearestHealthPack == null || distanceSqr(unit.position, lootBox.position) < distanceSqr(
-                                unit
-                                        .position, nearestHealthPack.position
-                        )
+                if (nearestHealthPack == null ||
+                        distanceSqr(unit.position, lootBox.position) < distanceSqr(unit.position, nearestHealthPack.position)
                 ) {
                     nearestHealthPack = lootBox
                 }
             }
         }
 
-//        if (game.currentTick == 1) {
-//            nearestWeapon?.let {
-//                buildPathForNearestWeapon(unit, nearestWeapon, game, debug)
-//            }
-//        }
+
+        if (game.currentTick == 0) {
+            nearestWeapon?.let {
+                val route = ArrayList<Node>()
+                val level = ArrayList<ArrayList<TileMarked>>()
+                for (i in game.level.tiles.indices) {
+                    level.add(ArrayList())
+                    for (element in game.level.tiles[i]) {
+                        level[i].add(TileMarked(element))
+                    }
+                }
+                buildPathForNearestWeapon1(unit, nearestWeapon, level, debug, route)
+                route.reverse()
+//                buildPathForNearestWeapon2(unit, nearestWeapon, game, debug, route)
+
+            }
+        }
         val targetPos = when {
-            unit.health != game.properties.unitMaxHealth && nearestHealthPack != null -> nearestHealthPack.position
+            unit.health <= game.properties.unitMaxHealth - game.properties.healthPackHealth && nearestHealthPack != null -> nearestHealthPack.position
             unit.weapon == null && nearestWeapon != null -> nearestWeapon.position
             nearestEnemy != null -> nearestEnemy.position
             else -> unit.position
         }
-
 
         var aim = Vec2Double(0.0, 0.0)
         if (nearestEnemy != null) {
@@ -98,30 +111,33 @@ class MyStrategy {
 //                )
 //            }
         }
+        var action = pa?.action
+        pa = pa?.parentPA
+        if (action == null) {
+            action = UnitAction()
+            var jump = targetPos.y > unit.position.y
+            if (targetPos.x > unit.position.x && game.level.tiles[(unit.position.x + 1).toInt()][(unit.position.y).toInt()] == Tile.WALL) {
+                jump = true
+            }
+            if (targetPos.x < unit.position.x && game.level.tiles[(unit.position.x - 1).toInt()][(unit.position.y).toInt()] == Tile.WALL) {
+                jump = true
+            }
 
-        var jump = targetPos.y > unit.position.y
-        if (targetPos.x > unit.position.x && game.level.tiles[(unit.position.x + 1).toInt()][(unit.position.y).toInt()] == Tile.WALL) {
-            jump = true
-        }
-        if (targetPos.x < unit.position.x && game.level.tiles[(unit.position.x - 1).toInt()][(unit.position.y).toInt()] == Tile.WALL) {
-            jump = true
-        }
 
-        val action = UnitAction()
-        action.velocity = getVelocity(unit.position.x, targetPos.x)
-        action.jump = jump
-        action.jumpDown = !jump
-        action.aim = aim
+            action.velocity = getVelocity(unit.position.x, targetPos.x)
+            action.jump = jump
+            action.jumpDown = !jump
+            action.aim = aim
 //        action.reload = false
 
-        if (nearestEnemy == null || unit.weapon == null) {
-            action.shoot = false
-        } else {
-            action.shoot = shootAllowed(unit, nearestEnemy, game, debug)
+            if (nearestEnemy == null || unit.weapon == null) {
+                action.shoot = false
+            } else {
+                action.shoot = shootAllowed(unit, nearestEnemy, game, debug)
+            }
+            action.swapWeapon = false
+            action.plantMine = false
         }
-        action.swapWeapon = false
-        action.plantMine = false
-
 //        debug.draw(CustomData.Log("maxSp: ${game.properties.unitMaxHorizontalSpeed} maxJS:${game.properties
 //                .unitJumpSpeed} jt:${game.properties.unitJumpTime}  ticksPS${game.properties.ticksPerSecond} dt:${game.properties.updatesPerTick}"))
 
@@ -161,72 +177,122 @@ class MyStrategy {
         return action
     }
 
-    private fun buildPathForNearestWeapon(unit: Unit, nearestWeapon: LootBox, game: Game, debug: Debug) {
+    private fun buildPathForNearestWeapon2(unit: Unit, nearestWeapon: LootBox, game: Game, debug: Debug, route: ArrayList<Node>): ProbablyAction? {
 
         val vel = getVelocity(unit.position.x, nearestWeapon.position.x)
 
-        val probActions = HashMap<Int, ArrayList<ProbablyAction>>()
+        val nodes = LinkedBlockingQueue<ProbablyAction>()
+        for (i in 2 downTo 0) {
+            for (j in 0..2) {
+                val act = model.UnitAction().apply {
+                    velocity = (i - 1) * vel
+                    jump = j == 0
+                    jumpDown = j == 2
+                }
+                val pa = ProbablyAction(act, getUnitMovement(UnitMovement(unit.position, unit.onGround),
+                        unit.size, unit.id,
+                        act, game), 0,
+                        null)
+                nodes.add(pa)
+            }
+        }
 
-        for (t in 1..10) {
+        var r: ProbablyAction? = null
+        var c = 0
 
-            val pas = probActions[t - 1]
-            if (pas.isNullOrEmpty()) {
-//                for (i in -1..1) {
+        while (nodes.isNotEmpty() && r == null) {
+            val n = nodes.poll()
+            println("nodes size ${nodes.size}")
+
+            for (i in 2 downTo 0) {
                 for (j in 0..2) {
+                    if (n.action.velocity == vel * (1 - i) && ((n.action.jump && j == 2) || (n.action.jumpDown && j == 1)))
+                        continue
                     val act = model.UnitAction().apply {
-                        velocity = /*i **/ vel
+                        velocity = (i - 1) * vel
                         jump = j == 0
                         jumpDown = j == 2
                     }
 
-                    if (probActions[t].isNullOrEmpty()) {
-                        probActions[t] = ArrayList<ProbablyAction>()
-                    }
-                    val r = ProbablyAction(act, getUnitMovement(UnitMovement(unit.position, unit.onGround),
-                            unit.size, unit.id,
-                            act, game), t,
-                            null)
-                    debug.draw(
-                            CustomData.Rect(
-                                    Vec2Float(r.probablyPositionAfterAction.pos.x.toFloat() - 0.1f,
-                                            r.probablyPositionAfterAction.pos.y.toFloat() - 0.1f),
-                                    Vec2Float(0.2f, 0.2f),
-                                    ColorFloat(111f, 111f, 111f, 255f)
-                            )
-                    )
-                    probActions[t]?.add(r)
-                }
-//                }
-            } else {
-                pas.forEach { parent ->
-                    //for (i in -1..1) {
-                    for (j in 0..2) {
-                        val act = model.UnitAction().apply {
-                            velocity = /*i **/ vel
-                            jump = j == 0
-                            jumpDown = j == 2
-                        }
+                    val pa = ProbablyAction(act, getUnitMovement(n.probablyPositionAfterAction, unit.size,
+                            unit.id, act, game), 0, n)
+                    println("pos after PA ${pa.probablyPositionAfterAction.pos.x}:${pa.probablyPositionAfterAction.pos.y}")
+                    if (nodes.any { it.probablyPositionAfterAction.pos.x == pa.probablyPositionAfterAction.pos.x && it.probablyPositionAfterAction.pos.y == pa.probablyPositionAfterAction.pos.y })
+                        continue
+                    if ((pa.probablyPositionAfterAction.pos.x - nearestWeapon.position.x) < (unit.size.x / 2 + nearestWeapon.size.x / 2) &&
+                            (pa.probablyPositionAfterAction.pos.y - nearestWeapon.position.y < unit.size.y / 2 + nearestWeapon.size.y / 2))
+                        r = pa
+                    nodes.add(pa)
 
-                        if (probActions[t].isNullOrEmpty()) {
-                            probActions[t] = ArrayList<ProbablyAction>()
-                        }
-                        val r = ProbablyAction(act, getUnitMovement(parent.probablyPositionAfterAction, unit.size,
-                                unit.id, act, game), t, null)
-                        debug.draw(
-                                CustomData.Rect(
-                                        Vec2Float(r.probablyPositionAfterAction.pos.x.toFloat() - 0.1f,
-                                                r.probablyPositionAfterAction.pos.y.toFloat() - 0.1f),
-                                        Vec2Float(0.2f, 0.2f),
-                                        ColorFloat(111f, 111f, 111f, 255f)
-                                )
-                        )
-                        probActions[t]?.add(r)
-                    }
-                    //}
+                }
+            }
+        }
+        nodes.clear()
+
+        r?.let {
+            var qq = it
+            do {
+                debug.draw(CustomData.Rect(
+                        Vec2Float(qq.probablyPositionAfterAction.pos.x.toFloat() - 0.1f,
+                                qq.probablyPositionAfterAction.pos.y.toFloat() - 0.1f),
+                        Vec2Float(0.2f, 0.2f),
+                        ColorFloat(111f, 111f, 111f, 255f)
+                ))
+                qq = qq.parentPA ?: return@let
+            } while (qq.parentPA != null)
+        }
+
+        return r
+    }
+
+    data class Node(val x: Int, val y: Int, val parentNode: Node? = null)
+
+    private fun buildPathForNearestWeapon1(unit: Unit, nearestWeapon: LootBox, level: ArrayList<ArrayList<TileMarked>>, debug: Debug, route: ArrayList<Node>) {
+        val nodes = LinkedBlockingQueue<Node>()
+
+        nodes.add(Node(unit.position.x.toInt(), unit.position.y.toInt()))
+
+        var r: Node? = null
+
+        while (nodes.isNotEmpty() && r == null) {
+            val n = nodes.poll()
+            r = checkTiles(n, unit.size, nearestWeapon, level, debug, nodes)
+        }
+
+        r?.let {
+            var qq = it
+            do {
+                route.add(qq)
+                debug.draw(CustomData.Rect(
+                        Vec2Float(qq.x.toFloat() - 0.1f,
+                                qq.y.toFloat() - 0.1f),
+                        Vec2Float(0.2f, 0.2f),
+                        ColorFloat(111f, 111f, 111f, 255f)
+                ))
+                qq = qq.parentNode ?: return
+            } while (qq.parentNode != null)
+        }
+    }
+
+    private fun checkTiles(currentNode: Node, unitSize: Vec2Double, target: LootBox, level: ArrayList<ArrayList<TileMarked>>, debug: Debug, nodes: LinkedBlockingQueue<Node>): Node? {
+
+        val dx = target.position.x - currentNode.x
+
+        for (i in if (dx > 0) 0..2 else 2 downTo 0) {
+            for (j in 0..2) {
+                val x = currentNode.x - i + 1
+                val y = currentNode.y + j - 1
+                if (x >= 0 && x < level.size && y >= 0 && y <= level[0].size && level[x][y].type != Tile.WALL && !level[x][y].mark) {
+                    level[x][y].mark = true
+                    val node = Node(x, y, currentNode)
+                    nodes.add(node)
+                    if (node.x == target.position.x.toInt() && node.y == target.position.y.toInt())
+                        return node
                 }
             }
         }
 
+        return null
     }
 
     private fun getVelocity(xCurrent: Double, xTarget: Double): Double {
@@ -296,6 +362,13 @@ class MyStrategy {
                     jumpAllowed = true
                     return UnitMovement(pos, jumpAllowed, boostJump = true, boostJumpTick = boostJumpTick)
                 }
+                if ((pos.y + unitSize.y).toInt() >= game.level.tiles[0].size) {
+                    boostJumpTick = 0
+                    jumpTick = 0
+                    jumpAllowed = false
+                    pos.y = game.level.tiles[0].size - unitSize.y
+                    return UnitMovement(pos, jumpAllowed, boostJump = false, boostJumpTick = boostJumpTick)
+                }
             }
 
             isJump(
@@ -311,6 +384,12 @@ class MyStrategy {
 
                 pos.y += jumpPerTick
 
+                if ((pos.y + unitSize.y).toInt() >= game.level.tiles[0].size) {
+                    jumpTick = 0
+                    jumpAllowed = false
+                    pos.y = game.level.tiles[0].size - unitSize.y
+                    return UnitMovement(pos, jumpAllowed, boostJump = false, boostJumpTick = boostJumpTick)
+                }
                 if (isUnitOnLadder(sourceMovement.pos, unitSize, game)) {
                     jumpTick = 0
                 } else {
@@ -623,4 +702,6 @@ class MyStrategy {
             val currentTick: Int,
             val parentPA: ProbablyAction?
     )
+
+    data class TileMarked(val type: Tile, var mark: Boolean = false)
 }
