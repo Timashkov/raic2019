@@ -1,7 +1,10 @@
 import model.*
 import model.Unit
 import java.lang.Math.abs
+import java.lang.Math.atan2
+import kotlin.math.atan
 import kotlin.math.sign
+import kotlin.math.tan
 
 class MyStrategy {
 
@@ -16,17 +19,21 @@ class MyStrategy {
     private var maxDXPerTick: Double = 0.0
     private var maxJumpTick = 0
     private var maxBoostJumpTick = 0
+    private var ticksPerSec = 0.0
     private lateinit var unitMovement: UnitMovement
 
     fun getAction(unit: model.Unit, game: Game, debug: Debug): UnitAction {
         var nearestEnemy: model.Unit? = null
 
-        maxDXPerTick = game.properties.unitMaxHorizontalSpeed / game.properties.ticksPerSecond
-        jumpPerTick = game.properties.unitJumpSpeed / game.properties.ticksPerSecond
-        boostJumpPerTick = game.properties.jumpPadJumpSpeed / game.properties.ticksPerSecond
+        if (boostJumpPerTick == 0.0) {
+            maxDXPerTick = game.properties.unitMaxHorizontalSpeed / game.properties.ticksPerSecond
+            jumpPerTick = game.properties.unitJumpSpeed / game.properties.ticksPerSecond
+            boostJumpPerTick = game.properties.jumpPadJumpSpeed / game.properties.ticksPerSecond
 
-        maxJumpTick = (game.properties.jumpPadJumpTime * game.properties.ticksPerSecond).toInt()
-        maxBoostJumpTick = (game.properties.jumpPadJumpTime * game.properties.ticksPerSecond).toInt()
+            maxJumpTick = (game.properties.jumpPadJumpTime * game.properties.ticksPerSecond).toInt()
+            maxBoostJumpTick = (game.properties.jumpPadJumpTime * game.properties.ticksPerSecond).toInt()
+            ticksPerSec = game.properties.ticksPerSecond
+        }
 
         for (other in game.units) {
             if (other.playerId != unit.playerId) {
@@ -63,11 +70,11 @@ class MyStrategy {
             }
         }
 
-        if (game.currentTick == 1) {
-            nearestWeapon?.let {
-                buildPathForNearestWeapon(unit, nearestWeapon, game, debug)
-            }
-        }
+//        if (game.currentTick == 1) {
+//            nearestWeapon?.let {
+//                buildPathForNearestWeapon(unit, nearestWeapon, game, debug)
+//            }
+//        }
         val targetPos = when {
             unit.health != game.properties.unitMaxHealth && nearestHealthPack != null -> nearestHealthPack.position
             unit.weapon == null && nearestWeapon != null -> nearestWeapon.position
@@ -82,28 +89,14 @@ class MyStrategy {
                     (nearestEnemy.position.x - unit.position.x) * 10,
                     (nearestEnemy.position.y - unit.position.y) * 10
             )
-            debug.draw(
-                    CustomData.Line(
-                            Vec2Float(
-                                    unit.position.x.toFloat(),
-                                    (unit.position.y + unit.size.y * 0.5).toFloat()
-                            ),
-                            Vec2Float(
-                                    nearestEnemy.position.x.toFloat(),
-                                    (nearestEnemy.position.y + nearestEnemy.size.y * 0.5).toFloat()
-                            ),
-                            0.1f,
-                            ColorFloat(10f, 10f, 10f, 10f)
-                    )
-            )
-            unit.weapon?.let {
-                debug.draw(
-                        CustomData.Log(
-                                "Weapon params: lft: ${it.lastFireTick} la: ${it.lastAngle} spr: ${it
-                                        .spread} mag: ${it.magazine} ft:${it.fireTimer} ws:${it.wasShooting}"
-                        )
-                )
-            }
+//            unit.weapon?.let {
+//                debug.draw(
+//                        CustomData.Log(
+//                                "Weapon params: lft: ${it.lastFireTick} la: ${it.lastAngle} spr: ${it
+//                                        .spread} mag: ${it.magazine} ft:${it.fireTimer} ws:${it.wasShooting}"
+//                        )
+//                )
+//            }
         }
 
         var jump = targetPos.y > unit.position.y
@@ -141,15 +134,15 @@ class MyStrategy {
             }
 
         unitMovement = getUnitMovement(unitMovement, unit.size, unit.id, action, game)
-        debug.draw(
-                CustomData.Log(
-                        "Action: pos:${unit.position.x}:${unit
-                                .position.y} jump:${action.jump} jumptick ${unitMovement.jumpTick} maxjumptick $maxJumpTick boostJumpTick " +
-                                "${unitMovement.boostJumpTick} maxboostjumptick $maxBoostJumpTick onGround ${unit
-                                        .onGround}  " +
-                                "jumpDown: ${action.jumpDown}"
-                )
-        )
+//        debug.draw(
+//                CustomData.Log(
+//                        "Action: pos:${unit.position.x}:${unit
+//                                .position.y} jump:${action.jump} jumptick ${unitMovement.jumpTick} maxjumptick $maxJumpTick boostJumpTick " +
+//                                "${unitMovement.boostJumpTick} maxboostjumptick $maxBoostJumpTick onGround ${unit
+//                                        .onGround}  " +
+//                                "jumpDown: ${action.jumpDown}"
+//                )
+//        )
         debug.draw(
                 CustomData.Rect(
                         Vec2Float(unitMovement.pos.x.toFloat() - 0.2f, unitMovement.pos.y.toFloat() - 0.2f),
@@ -237,11 +230,11 @@ class MyStrategy {
     }
 
     private fun getVelocity(xCurrent: Double, xTarget: Double): Double {
-        val dx = xTarget - xCurrent
+        val dx = (xTarget - xCurrent)
         return if (abs(dx) > maxDXPerTick) {
             dx * 10
         } else {
-            dx
+            dx * ticksPerSec
         }
     }
 
@@ -444,48 +437,140 @@ class MyStrategy {
     }
 
     private fun shootAllowed(unit: model.Unit, nearestEnemy: model.Unit, game: Game, debug: Debug): Boolean {
-        var xl = unit.position.x
-        var xr = nearestEnemy.position.x
-        if (unit.position.x > nearestEnemy.position.x) {
-            xl = nearestEnemy.position.x
-            xr = unit.position.x
+        val unitCenter = Vec2Double(unit.position.x, unit.position.y + unit.size.y / 2)
+        val enemyCenter = Vec2Double(nearestEnemy.position.x, nearestEnemy.position.y + nearestEnemy.size.y / 2)
+
+        var xl = unitCenter.x
+        var xr = enemyCenter.x
+        if (unitCenter.x > enemyCenter.x) {
+            xl = enemyCenter.x
+            xr = unitCenter.x
         }
 
-        var yt = nearestEnemy.position.y + 0.5 * nearestEnemy.size.y
-        var yb = unit.position.y + 0.5 * unit.size.y
-        if (unit.position.y > nearestEnemy.position.y) {
-            val yy = yb
-            yb = yt
-            yt = yy
+        var yt = enemyCenter.y
+        var yb = unitCenter.y
+        if (unitCenter.y > enemyCenter.y) {
+            yb = enemyCenter.y
+            yt = unitCenter.y
         }
+
+        //drawing section
+        val K = (unitCenter.y - enemyCenter.y) / (unitCenter.x - enemyCenter.x)
+
+        val Xt = if (unitCenter.x > enemyCenter.x) 0 else game.level.tiles.size - 1
+        val Yt = K * (Xt - unitCenter.x) + unitCenter.y
+
+        debug.draw(
+                CustomData.Line(
+                        Vec2Float(unitCenter.x.toFloat(), unitCenter.y.toFloat()),
+                        Vec2Float(Xt.toFloat(), Yt.toFloat()),
+                        0.1f,
+                        ColorFloat(10f, 10f, 10f, 10f)
+                )
+        )
+
+        val debugLA = unit.weapon?.lastAngle ?: 0.0
+        val debugMin = (unit.weapon?.lastAngle ?: 0.0) - (unit.weapon?.spread ?: 0.0)
+        val debugMax = (unit.weapon?.lastAngle ?: 0.0) + (unit.weapon?.spread ?: 0.0)
+
+        val lastAngleK = tan(unit.weapon?.lastAngle ?: 0.0)
+        val anglePlusK = tan((unit.weapon?.lastAngle ?: 0.0) + (unit.weapon?.spread ?: 0.0))
+        val angleMinusK = tan((unit.weapon?.lastAngle ?: 0.0) - (unit.weapon?.spread ?: 0.0))
+
+        debug.draw(CustomData.Log("Angles: $debugLA:$debugMin$debugMax , K:$lastAngleK:$angleMinusK:$anglePlusK"))
+
+        val Yta = lastAngleK * (Xt - unitCenter.x) + unitCenter.y
+        debug.draw(
+                CustomData.Line(
+                        Vec2Float(unitCenter.x.toFloat(), unitCenter.y.toFloat()),
+                        Vec2Float(Xt.toFloat(), Yta.toFloat()),
+                        0.1f,
+                        ColorFloat(255f, 0f, 0f, 155f)
+                )
+        )
+        val Ytp = anglePlusK * (-unitCenter.x) + unitCenter.y
+        debug.draw(
+                CustomData.Line(
+                        Vec2Float(unitCenter.x.toFloat(), unitCenter.y.toFloat()),
+                        Vec2Float(0.0f, Ytp.toFloat()),
+                        0.1f,
+                        ColorFloat(0f, 255f, 0f, 255f)
+                )
+        )
+        val Ytp1 = anglePlusK * (31 - unitCenter.x) + unitCenter.y
+        debug.draw(
+                CustomData.Line(
+                        Vec2Float(unitCenter.x.toFloat(), unitCenter.y.toFloat()),
+                        Vec2Float(31f, Ytp1.toFloat()),
+                        0.1f,
+                        ColorFloat(0f, 255f, 0f, 255f)
+                )
+        )
+        val Ytm = angleMinusK * (-unitCenter.x) + unitCenter.y
+        debug.draw(
+                CustomData.Line(
+                        Vec2Float(unitCenter.x.toFloat(), unitCenter.y.toFloat()),
+                        Vec2Float(0f, Ytm.toFloat()),
+                        0.1f,
+                        ColorFloat(0f, 0f, 255f, 255f)
+                )
+        )
+        val Ytm1 = angleMinusK * (31 - unitCenter.x) + unitCenter.y
+        debug.draw(
+                CustomData.Line(
+                        Vec2Float(unitCenter.x.toFloat(), unitCenter.y.toFloat()),
+                        Vec2Float(31f, Ytm1.toFloat()),
+                        0.1f,
+                        ColorFloat(0f, 0f, 255f, 255f)
+                )
+        )
+        //
 
         val indexLeft = xl.toInt()
         val indexRight = xr.toInt()
         val indexBottom = yb.toInt()
         val indexTop = yt.toInt()
 
-        for (i in if (unit.position.x > nearestEnemy.position.x) indexRight downTo indexLeft else indexLeft..indexRight) {
+        for (i in if (unitCenter.x > enemyCenter.x) indexRight downTo indexLeft else indexLeft..indexRight) {
             for (j in indexBottom..indexTop) {
                 if (game.level.tiles[i][j].discriminant == Tile.WALL.discriminant) {
-                    if (xl.toInt() == xr.toInt() || yt.toInt() == yb.toInt() || directrixTileCollision(
-                                    i,
-                                    j,
-                                    unit.position.x,
-                                    nearestEnemy.position.x,
-                                    unit.position.y + unit.size.y * 0.5,
-                                    nearestEnemy.position.y + nearestEnemy.size.y * 0.5
-                            )
+                    if (xl.toInt() == xr.toInt() || yt.toInt() == yb.toInt() ||
+                            directrixTileCollision(i, j, unitCenter, enemyCenter,
+                                    unit.weapon!!.spread, game.properties.weaponParams[unit.weapon!!.typ]?.bullet?.size
+                                    ?: 0.0)
+                    /* + check for rocket and distances*/
                     ) {
                         debug.draw(
                                 CustomData.Rect(
-                                        Vec2Float(
-                                                i.toFloat(),
-                                                j.toFloat()
-                                        ),
-                                        Vec2Float(
-                                                1f,
-                                                1f
-                                        ),
+                                        Vec2Float(i.toFloat(), j.toFloat()),
+                                        Vec2Float(1f, 1f),
+                                        ColorFloat(0f, 155f, 155f, 110f)
+                                )
+                        )
+                        return false
+                    }
+                }
+            }
+        }
+        if (unit.weapon?.typ == WeaponType.ROCKET_LAUNCHER) {
+            val r = game.properties.weaponParams[WeaponType.ROCKET_LAUNCHER]?.explosion?.radius ?: 0.0
+            val dam = game.properties.weaponParams[WeaponType.ROCKET_LAUNCHER]?.explosion?.damage ?: 0
+            val left = if (enemyCenter.x < unitCenter.x) (unit.position.x - (unit.size.x / 2) - r).toInt() else unitCenter.x.toInt()
+            val right = if (enemyCenter.x >= unitCenter.x) (unit.position.x + (unit.size.x / 2) + r).toInt() else unitCenter.x.toInt()
+            val top = if (enemyCenter.y >= unitCenter.y) (unit.position.y + (unit.size.y) + r).toInt() else unit.position.y.toInt()
+            val bottom = if (enemyCenter.y < unitCenter.y) (unit.position.y - r).toInt() else unit.position.y.toInt()
+
+            for (i in left..right) {
+                for (j in bottom..top) {
+                    if ((i < 0 || j < 0 || i >= game.level.tiles.size || j >= game.level.tiles[0].size || game.level.tiles[i][j].discriminant == Tile.WALL.discriminant)
+                            && directrixTileCollision(i, j, unitCenter, enemyCenter,
+                                    unit.weapon!!.spread, game.properties.weaponParams[WeaponType.ROCKET_LAUNCHER]?.bullet?.size
+                                    ?: 0.0)
+                            && (dam > unit.health) && (dam < nearestEnemy.health || nearestEnemy.health > unit.health)) {
+                        debug.draw(
+                                CustomData.Rect(
+                                        Vec2Float(i.toFloat(), j.toFloat()),
+                                        Vec2Float(1f, 1f),
                                         ColorFloat(0f, 155f, 155f, 110f)
                                 )
                         )
@@ -500,27 +585,30 @@ class MyStrategy {
     private fun directrixTileCollision(
             tileXIndex: Int,
             tileYIndex: Int,
-            x1: Double,
-            x2: Double,
-            y1: Double,
-            y2: Double
+            unitCenter: Vec2Double,
+            enemyCenter: Vec2Double,
+            deltaAngle: Double,
+            bulletSize: Double
     ):
             Boolean {
 
-        val first = y1 - y2
-        val second = y2 * x1 - y1 * x2
-        val third = x1 - x2
+        val actualAlpha = atan2(enemyCenter.y - unitCenter.y, enemyCenter.x - unitCenter.x)
 
-        val yl = (tileXIndex * first + second) / third
-        if (yl < tileYIndex + 1 && yl > tileYIndex) {
+        val alpha1 = atan2(tileYIndex - bulletSize / 2 - unitCenter.y, tileXIndex - bulletSize / 2 - unitCenter.x)
+        if (alpha1 <= actualAlpha + deltaAngle && alpha1 >= actualAlpha - deltaAngle)
             return true
-        }
 
-        val yr = ((tileXIndex + 1) * first + second) / third
-        if (yr < tileYIndex + 1 && yr > tileYIndex) {
+        val alpha2 = atan2(tileYIndex + 1 + bulletSize / 2 - unitCenter.y, tileXIndex - bulletSize / 2 - unitCenter.x)
+        if (alpha2 <= actualAlpha + deltaAngle && alpha2 >= actualAlpha - deltaAngle)
             return true
-        }
 
+        val alpha3 = atan2(tileYIndex - bulletSize / 2 - unitCenter.y, tileXIndex + 1 + bulletSize / 2 - unitCenter.x)
+        if (alpha3 <= actualAlpha + deltaAngle && alpha3 >= actualAlpha - deltaAngle)
+            return true
+
+        val alpha4 = atan2(tileYIndex + 1 + bulletSize / 2 - unitCenter.y, tileXIndex + 1 + bulletSize / 2 - unitCenter.x)
+        if (alpha4 <= actualAlpha + deltaAngle && alpha4 >= actualAlpha - deltaAngle)
+            return true
         return false
     }
 
@@ -534,7 +622,5 @@ class MyStrategy {
             val probablyPositionAfterAction: UnitMovement,
             val currentTick: Int,
             val parentPA: ProbablyAction?
-    ) {
-        var childs: ArrayList<ProbablyAction> = ArrayList()
-    }
+    )
 }
