@@ -24,7 +24,8 @@ class MyStrategy {
     private var maxBoostJumpTick = 0
     private var ticksPerSec = 0.0
     private lateinit var unitMovement: UnitMovement
-    private var pa: ProbablyAction? = null
+    private var index = 0
+    private var pa: ArrayList<ProbablyAction>? = null
 
     fun getAction(unit: model.Unit, game: Game, debug: Debug): UnitAction {
         var nearestEnemy: model.Unit? = null
@@ -85,8 +86,8 @@ class MyStrategy {
                 }
                 buildPathForNearestWeapon1(unit, nearestWeapon, level, debug, route)
                 route.reverse()
-//                buildPathForNearestWeapon2(unit, nearestWeapon, game, debug, route)
-
+                pa = buildPathForNearestWeapon2(unit, nearestWeapon, game, debug, route)
+                pa?.reverse()
             }
         }
         val targetPos = when {
@@ -111,8 +112,13 @@ class MyStrategy {
 //                )
 //            }
         }
-        var action = pa?.action
-        pa = pa?.parentPA
+
+        var action = if (index < pa?.size ?: -1) {
+            index++
+            pa?.get(index - 1)?.action
+
+        } else null
+
         if (action == null) {
             action = UnitAction()
             var jump = targetPos.y > unit.position.y
@@ -127,17 +133,18 @@ class MyStrategy {
             action.velocity = getVelocity(unit.position.x, targetPos.x)
             action.jump = jump
             action.jumpDown = !jump
-            action.aim = aim
+
+        }
+        action.aim = aim
 //        action.reload = false
 
-            if (nearestEnemy == null || unit.weapon == null) {
-                action.shoot = false
-            } else {
-                action.shoot = shootAllowed(unit, nearestEnemy, game, debug)
-            }
-            action.swapWeapon = false
-            action.plantMine = false
+        if (nearestEnemy == null || unit.weapon == null) {
+            action.shoot = false
+        } else {
+            action.shoot = shootAllowed(unit, nearestEnemy, game, debug)
         }
+        action.swapWeapon = false
+        action.plantMine = false
 //        debug.draw(CustomData.Log("maxSp: ${game.properties.unitMaxHorizontalSpeed} maxJS:${game.properties
 //                .unitJumpSpeed} jt:${game.properties.unitJumpTime}  ticksPS${game.properties.ticksPerSecond} dt:${game.properties.updatesPerTick}"))
 
@@ -177,11 +184,12 @@ class MyStrategy {
         return action
     }
 
-    private fun buildPathForNearestWeapon2(unit: Unit, nearestWeapon: LootBox, game: Game, debug: Debug, route: ArrayList<Node>): ProbablyAction? {
+    private fun buildPathForNearestWeapon2(unit: Unit, nearestWeapon: LootBox, game: Game, debug: Debug, route: ArrayList<Node>): ArrayList<ProbablyAction>? {
 
-        val vel = getVelocity(unit.position.x, nearestWeapon.position.x)
+        val vel = abs(getVelocity(unit.position.x, nearestWeapon.position.x))
 
         val nodes = LinkedBlockingQueue<ProbablyAction>()
+
         for (i in 2 downTo 0) {
             for (j in 0..2) {
                 val act = model.UnitAction().apply {
@@ -189,6 +197,29 @@ class MyStrategy {
                     jump = j == 0
                     jumpDown = j == 2
                 }
+                val currentStep = route.firstOrNull { step ->
+                    step.x <= unit.position.x &&
+                            step.x + 1 > unit.position.x &&
+                            step.y <= unit.position.y && step.y + 1 > unit.position.y
+                }
+                val nextStep = if (currentStep != null && route.indexOf(currentStep) != route.size - 1) {
+                    route[route.indexOf(currentStep) + 1]
+                } else null
+
+                if (nextStep != null && currentStep != null) {
+                    if (act.jumpDown && currentStep.y <= nextStep.y && currentStep.x != nextStep.x)
+                        continue
+                    if (act.jump && currentStep.y >= nextStep.y && currentStep.x != nextStep.x)
+                        continue
+                    if (act.velocity < 0 && currentStep.x < nextStep.x) {
+                        continue
+                    }
+                    if (act.velocity > 0 && currentStep.x > nextStep.x) {
+                        continue
+                    }
+
+                }
+
                 val pa = ProbablyAction(act, getUnitMovement(UnitMovement(unit.position, unit.onGround),
                         unit.size, unit.id,
                         act, game), 0,
@@ -202,12 +233,35 @@ class MyStrategy {
 
         while (nodes.isNotEmpty() && r == null) {
             val n = nodes.poll()
-            println("nodes size ${nodes.size}")
+            val currentStep = route.firstOrNull { step ->
+                step.x <= n.probablyPositionAfterAction.pos.x &&
+                        step.x + 1 > n.probablyPositionAfterAction.pos.x &&
+                        step.y <= n.probablyPositionAfterAction.pos.y && step.y + 1 > n.probablyPositionAfterAction.pos.y
+            }
+            val nextStep = if (currentStep != null && route.indexOf(currentStep) != route.size - 1) {
+                route[route.indexOf(currentStep) + 1]
+            } else null
 
             for (i in 2 downTo 0) {
-                for (j in 0..2) {
-                    if (n.action.velocity == vel * (1 - i) && ((n.action.jump && j == 2) || (n.action.jumpDown && j == 1)))
+                if (nextStep != null && currentStep != null) {
+                    if (i < 2 && currentStep.x < nextStep.x) {
                         continue
+                    }
+                    if (i > 0 && currentStep.x > nextStep.x) {
+                        continue
+                    }
+
+                } else continue
+
+                for (j in 0..2) {
+                    if (j == 2 && currentStep.y <= nextStep.y && currentStep.x != nextStep.x)
+                        continue
+                    if (j == 0 && currentStep.y >= nextStep.y && currentStep.x != nextStep.x)
+                        continue
+
+                    if ((currentStep.x != nextStep.x || currentStep.y != nextStep.y) && i == 1 && j == 1) {
+                        continue
+                    }
                     val act = model.UnitAction().apply {
                         velocity = (i - 1) * vel
                         jump = j == 0
@@ -216,22 +270,23 @@ class MyStrategy {
 
                     val pa = ProbablyAction(act, getUnitMovement(n.probablyPositionAfterAction, unit.size,
                             unit.id, act, game), 0, n)
-                    println("pos after PA ${pa.probablyPositionAfterAction.pos.x}:${pa.probablyPositionAfterAction.pos.y}")
                     if (nodes.any { it.probablyPositionAfterAction.pos.x == pa.probablyPositionAfterAction.pos.x && it.probablyPositionAfterAction.pos.y == pa.probablyPositionAfterAction.pos.y })
                         continue
                     if ((pa.probablyPositionAfterAction.pos.x - nearestWeapon.position.x) < (unit.size.x / 2 + nearestWeapon.size.x / 2) &&
                             (pa.probablyPositionAfterAction.pos.y - nearestWeapon.position.y < unit.size.y / 2 + nearestWeapon.size.y / 2))
                         r = pa
                     nodes.add(pa)
-
                 }
             }
         }
         nodes.clear()
 
         r?.let {
+            val result = ArrayList<ProbablyAction>()
+
             var qq = it
             do {
+                result.add(qq)
                 debug.draw(CustomData.Rect(
                         Vec2Float(qq.probablyPositionAfterAction.pos.x.toFloat() - 0.1f,
                                 qq.probablyPositionAfterAction.pos.y.toFloat() - 0.1f),
@@ -240,9 +295,10 @@ class MyStrategy {
                 ))
                 qq = qq.parentPA ?: return@let
             } while (qq.parentPA != null)
+            return result
         }
 
-        return r
+        return null
     }
 
     data class Node(val x: Int, val y: Int, val parentNode: Node? = null)
@@ -270,7 +326,7 @@ class MyStrategy {
                         ColorFloat(111f, 111f, 111f, 255f)
                 ))
                 qq = qq.parentNode ?: return
-            } while (qq.parentNode != null)
+            } while (qq != null)
         }
     }
 
@@ -279,14 +335,15 @@ class MyStrategy {
         val dx = target.position.x - currentNode.x
 
         for (i in if (dx > 0) 0..2 else 2 downTo 0) {
+            val x = currentNode.x - i + 1
             for (j in 0..2) {
-                val x = currentNode.x - i + 1
                 val y = currentNode.y + j - 1
                 if (x >= 0 && x < level.size && y >= 0 && y <= level[0].size && level[x][y].type != Tile.WALL && !level[x][y].mark) {
                     level[x][y].mark = true
                     val node = Node(x, y, currentNode)
                     nodes.add(node)
-                    if (node.x == target.position.x.toInt() && node.y == target.position.y.toInt())
+                    if (abs(node.x + unitSize.x / 2 - target.position.x - target.size.x / 2) < (unitSize.x / 2 + target.size.x / 2) &&
+                            abs(node.y + unitSize.y / 2 - target.position.y - target.size.y / 2) < (target.size.y / 2 + unitSize.y / 2))
                         return node
                 }
             }
