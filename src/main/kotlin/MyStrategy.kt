@@ -1,13 +1,9 @@
 import model.*
 import model.Unit
-import java.lang.Math.abs
-import java.lang.Math.atan2
-import java.util.*
 import java.util.concurrent.LinkedBlockingQueue
 import kotlin.collections.ArrayList
-import kotlin.collections.HashMap
+import kotlin.math.abs
 import kotlin.math.sign
-import kotlin.math.tan
 
 class MyStrategy {
 
@@ -590,78 +586,6 @@ class MyStrategy {
             yt = unitCenter.y
         }
 
-        //drawing section
-        val K = (unitCenter.y - enemyCenter.y) / (unitCenter.x - enemyCenter.x)
-
-        val Xt = if (unitCenter.x > enemyCenter.x) 0 else game.level.tiles.size - 1
-        val Yt = K * (Xt - unitCenter.x) + unitCenter.y
-
-        debug.draw(
-                CustomData.Line(
-                        Vec2Float(unitCenter.x.toFloat(), unitCenter.y.toFloat()),
-                        Vec2Float(Xt.toFloat(), Yt.toFloat()),
-                        0.1f,
-                        ColorFloat(10f, 10f, 10f, 10f)
-                )
-        )
-
-        val debugLA = unit.weapon?.lastAngle ?: 0.0
-        val debugMin = (unit.weapon?.lastAngle ?: 0.0) - (unit.weapon?.spread ?: 0.0)
-        val debugMax = (unit.weapon?.lastAngle ?: 0.0) + (unit.weapon?.spread ?: 0.0)
-
-        val lastAngleK = tan(unit.weapon?.lastAngle ?: 0.0)
-        val anglePlusK = tan((unit.weapon?.lastAngle ?: 0.0) + (unit.weapon?.spread ?: 0.0))
-        val angleMinusK = tan((unit.weapon?.lastAngle ?: 0.0) - (unit.weapon?.spread ?: 0.0))
-
-        debug.draw(CustomData.Log("Angles: $debugLA:$debugMin$debugMax , K:$lastAngleK:$angleMinusK:$anglePlusK"))
-
-        val Yta = lastAngleK * (Xt - unitCenter.x) + unitCenter.y
-        debug.draw(
-                CustomData.Line(
-                        Vec2Float(unitCenter.x.toFloat(), unitCenter.y.toFloat()),
-                        Vec2Float(Xt.toFloat(), Yta.toFloat()),
-                        0.1f,
-                        ColorFloat(255f, 0f, 0f, 155f)
-                )
-        )
-        val Ytp = anglePlusK * (-unitCenter.x) + unitCenter.y
-        debug.draw(
-                CustomData.Line(
-                        Vec2Float(unitCenter.x.toFloat(), unitCenter.y.toFloat()),
-                        Vec2Float(0.0f, Ytp.toFloat()),
-                        0.1f,
-                        ColorFloat(0f, 255f, 0f, 255f)
-                )
-        )
-        val Ytp1 = anglePlusK * (31 - unitCenter.x) + unitCenter.y
-        debug.draw(
-                CustomData.Line(
-                        Vec2Float(unitCenter.x.toFloat(), unitCenter.y.toFloat()),
-                        Vec2Float(31f, Ytp1.toFloat()),
-                        0.1f,
-                        ColorFloat(0f, 255f, 0f, 255f)
-                )
-        )
-        val Ytm = angleMinusK * (-unitCenter.x) + unitCenter.y
-        debug.draw(
-                CustomData.Line(
-                        Vec2Float(unitCenter.x.toFloat(), unitCenter.y.toFloat()),
-                        Vec2Float(0f, Ytm.toFloat()),
-                        0.1f,
-                        ColorFloat(0f, 0f, 255f, 255f)
-                )
-        )
-        val Ytm1 = angleMinusK * (31 - unitCenter.x) + unitCenter.y
-        debug.draw(
-                CustomData.Line(
-                        Vec2Float(unitCenter.x.toFloat(), unitCenter.y.toFloat()),
-                        Vec2Float(31f, Ytm1.toFloat()),
-                        0.1f,
-                        ColorFloat(0f, 0f, 255f, 255f)
-                )
-        )
-        //
-
         val indexLeft = xl.toInt()
         val indexRight = xr.toInt()
         val indexBottom = yb.toInt()
@@ -722,29 +646,38 @@ class MyStrategy {
             tileXIndex: Int,
             tileYIndex: Int,
             unitCenter: Vec2Double,
-            enemyCenter: Vec2Double,
+            aimCenter: Vec2Double,
             deltaAngle: Double,
             bulletSize: Double
-    ):
-            Boolean {
+    ): Boolean {
 
-        val actualAlpha = atan2(enemyCenter.y - unitCenter.y, enemyCenter.x - unitCenter.x)
+        val actualAlpha = kotlin.math.atan2(aimCenter.y - unitCenter.y, aimCenter.x - unitCenter.x)
 
-        val alpha1 = atan2(tileYIndex - bulletSize / 2 - unitCenter.y, tileXIndex - bulletSize / 2 - unitCenter.x)
+        val corner1 = Vec2Double(tileXIndex - bulletSize / 2, tileYIndex - bulletSize / 2)
+        val alpha1 = kotlin.math.atan2(corner1.y - unitCenter.y, corner1.x - unitCenter.x)
         if (alpha1 <= actualAlpha + deltaAngle && alpha1 >= actualAlpha - deltaAngle)
             return true
 
-        val alpha2 = atan2(tileYIndex + 1 + bulletSize / 2 - unitCenter.y, tileXIndex - bulletSize / 2 - unitCenter.x)
+        val corner2 = Vec2Double(tileXIndex - bulletSize / 2, tileYIndex + 1 + bulletSize / 2)
+        val alpha2 = kotlin.math.atan2(corner2.y - unitCenter.y, corner2.x - unitCenter.x)
         if (alpha2 <= actualAlpha + deltaAngle && alpha2 >= actualAlpha - deltaAngle)
             return true
 
-        val alpha3 = atan2(tileYIndex - bulletSize / 2 - unitCenter.y, tileXIndex + 1 + bulletSize / 2 - unitCenter.x)
+        val corner3 = Vec2Double(tileXIndex + 1 + bulletSize / 2, tileYIndex - bulletSize / 2)
+        val alpha3 =
+                kotlin.math.atan2(corner3.y - unitCenter.y, corner3.x - unitCenter.x)
         if (alpha3 <= actualAlpha + deltaAngle && alpha3 >= actualAlpha - deltaAngle)
             return true
 
-        val alpha4 = atan2(tileYIndex + 1 + bulletSize / 2 - unitCenter.y, tileXIndex + 1 + bulletSize / 2 - unitCenter.x)
+        val corner4 = Vec2Double(tileXIndex + 1 + bulletSize / 2, tileYIndex + 1 + bulletSize / 2)
+        val alpha4 =
+                Math.atan2(corner4.y - unitCenter.y, corner4.x - unitCenter.x)
         if (alpha4 <= actualAlpha + deltaAngle && alpha4 >= actualAlpha - deltaAngle)
             return true
+        val s1 = sign(actualAlpha - alpha1)
+        if (s1 != sign(actualAlpha - alpha2) || s1 != sign(actualAlpha - alpha3) || s1 != sign(actualAlpha - alpha4))
+            return true
+
         return false
     }
 
