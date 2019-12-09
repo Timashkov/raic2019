@@ -19,6 +19,7 @@ class MyStrategy {
     private var maxJumpTick = 0
     private var maxBoostJumpTick = 0
     private var maxJumpTiles = 0.0
+    private var maxBoostJumpTiles = 0.0
     private var ticksPerSec = 0.0
     private lateinit var unitMovement: UnitMovement
     private var index = 0
@@ -33,6 +34,7 @@ class MyStrategy {
             jumpPerTick = game.properties.unitJumpSpeed / game.properties.ticksPerSecond
             boostJumpPerTick = game.properties.jumpPadJumpSpeed / game.properties.ticksPerSecond
             maxJumpTiles = (game.properties.unitJumpTime * game.properties.unitJumpSpeed)
+            maxBoostJumpTiles = (game.properties.jumpPadJumpSpeed * game.properties.jumpPadJumpTime)
             maxJumpTick = (game.properties.unitJumpTime * game.properties.ticksPerSecond).toInt()
             maxBoostJumpTick = (game.properties.jumpPadJumpTime * game.properties.ticksPerSecond).toInt()
             ticksPerSec = game.properties.ticksPerSecond
@@ -74,6 +76,18 @@ class MyStrategy {
             }
         }
 
+        if (route.isNotEmpty() &&
+            route[0].x <= unit.position.x &&
+            (route[0].x + 1) >= unit.position.x &&
+            (route.size == 1 || route[1].x != route[0].x ||
+                    (route[0].y <= unit.position.y &&
+                            (route[0].y) + 1 >= unit.position.y
+                            )
+                    )
+        ) {
+            route.removeAt(0)
+        }
+
         val targetObj = when {
             unit.health <= game.properties.unitMaxHealth - game.properties.healthPackHealth &&
                     nearestHealthPack != null -> SquareObject(nearestHealthPack.position, nearestHealthPack.size)
@@ -98,13 +112,21 @@ class MyStrategy {
 
         }
 
-        if (route[0].x <= unit.position.x &&
-            (route[0].x + 1) >= unit.position.x &&
-            route[0].y <= unit.position.y &&
-            (route[0].y) + 1 >= unit.position.y
-        ) {
-            route.removeAt(0)
+        if (route.isNotEmpty()) {
+            route.forEach { step ->
+                debug.draw(
+                    CustomData.Rect(
+                        Vec2Float(
+                            step.x.toFloat() + 0.4f,
+                            step.y.toFloat() + 0.4f
+                        ),
+                        Vec2Float(0.2f, 0.2f),
+                        ColorFloat(111f, 111f, 111f, 255f)
+                    )
+                )
+            }
         }
+
         val targetPos = if (route.isEmpty()) targetObj.pos else route[0]
 
         var aim = Vec2Double(0.0, 0.0)
@@ -315,8 +337,8 @@ class MyStrategy {
                 debug.draw(
                     CustomData.Rect(
                         Vec2Float(
-                            qq.probablyPositionAfterAction.pos.x.toFloat() - 0.1f,
-                            qq.probablyPositionAfterAction.pos.y.toFloat() - 0.1f
+                            qq.probablyPositionAfterAction.pos.x.toFloat() + 0.4f,
+                            qq.probablyPositionAfterAction.pos.y.toFloat() + 0.4f
                         ),
                         Vec2Float(0.2f, 0.2f),
                         ColorFloat(111f, 111f, 111f, 255f)
@@ -352,16 +374,6 @@ class MyStrategy {
             var qq = it
             do {
                 route.add(Vec2Double(qq.x.toDouble(), qq.y.toDouble()))
-                debug.draw(
-                    CustomData.Rect(
-                        Vec2Float(
-                            qq.x.toFloat() - 0.1f,
-                            qq.y.toFloat() - 0.1f
-                        ),
-                        Vec2Float(0.2f, 0.2f),
-                        ColorFloat(111f, 111f, 111f, 255f)
-                    )
-                )
                 qq = qq.parentNode ?: return
             } while (qq != null)
         }
@@ -378,13 +390,37 @@ class MyStrategy {
 
         val dx = target.pos.x - currentNode.x
 
-        for (i in if (dx > 0) 0..2 else 2 downTo 0) {
+        for (i in if (dx > 0) 0..1 else 2 downTo 1) {
             val x = currentNode.x - i + 1
             for (j in 0..2) {
-                val y = currentNode.y + j - 1
-                if (x >= 0 && x < level.size && y >= 0 && y <= level[0].size && level[x][y].type != Tile.WALL && !level[x][y].mark) {
-                    level[x][y].mark = true
-                    val node = Node(x, y, currentNode)
+                val y = currentNode.y - j + 1
+
+//                if (currentNode.jumpTile > maxJumpTiles || currentNode.boostJumpTile > maxBoostJumpTiles)
+//                    continue
+                if (currentNode.y < currentNode.parentNode?.y ?: 0 && level[currentNode.x][currentNode.y].type !in arrayOf(Tile.LADDER, Tile.PLATFORM)
+                    && j == 0)
+                    continue
+
+                if (x >= 0 && x < level.size && y >= 0 && y <= level[0].size && level[x][y].type != Tile.WALL && level[x][y].mark < 10) {
+                    var n: Node? = currentNode
+                    var exist = false
+                    do {
+                        if (n?.parentNode?.x == x && n?.parentNode?.y == y) {
+                            exist = true
+                            break
+                        }
+                        n = n?.parentNode
+                    } while (n != null)
+
+                    level[x][y].mark++
+
+
+                    val node = Node(
+                        x, y,
+                        if (currentNode.jumpTile >= 0 && j == 0) currentNode.jumpTile + 1 else currentNode.jumpTile,
+                        if (currentNode.boostJumpTile >= 0 && j == 0) currentNode.boostJumpTile + 1 else currentNode.boostJumpTile,
+                        currentNode
+                    )
                     nodes.add(node)
                     if (abs(node.x + unitSize.x / 2 - target.pos.x - target.size.x / 2) < (unitSize.x / 2 + target.size.x / 2) &&
                         abs(node.y + unitSize.y / 2 - target.pos.y - target.size.y / 2) < (target.size.y / 2 + unitSize.y / 2)
@@ -448,8 +484,6 @@ class MyStrategy {
             pos.y += boostJumpPerTick
             return UnitMovement(pos, jumpAllowed = false, boostJump = true, boostJumpTick = 1)
         }
-
-        /*удариться головой*/
 
         var boostJumpTick = sourceMovement.boostJumpTick
         var jumpTick = sourceMovement.jumpTick
@@ -763,7 +797,14 @@ class MyStrategy {
         val parentPA: ProbablyAction?
     )
 
-    data class TileMarked(val type: Tile, var mark: Boolean = false)
-    data class Node(val x: Int, val y: Int, val parentNode: Node? = null)
+    data class TileMarked(val type: Tile, var mark: Int = 0)
+    data class Node(
+        val x: Int,
+        val y: Int,
+        val jumpTile: Int = -1,
+        val boostJumpTile: Int = -1,
+        val parentNode: Node? = null
+    )
+
     data class SquareObject(val pos: Vec2Double, val size: Vec2Double)
 }
