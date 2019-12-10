@@ -66,6 +66,7 @@ class MyStrategy {
 
 
         if (route.isEmpty()) {
+            lootRoutes.clear()
             for (lootBox in game.lootBoxes) {
                 val localRoute = ArrayList<Vec2Double>()
                 buildPath(unit, SquareObject(lootBox.position, lootBox.size), level, debug, localRoute)
@@ -188,12 +189,12 @@ class MyStrategy {
         action.aim = aim
 //        action.reload = false
 
-        action.shoot = false
-//        if (nearestEnemy == null || unit.weapon == null) {
-//            action.shoot = false
-//        } else {
-//            action.shoot = shootAllowed(unit, nearestEnemy, game, debug)
-//        }
+//        action.shoot = false
+        if (nearestEnemy == null || unit.weapon == null) {
+            action.shoot = false
+        } else {
+            action.shoot = shootAllowed(unit, nearestEnemy, game, debug)
+        }
         action.swapWeapon = false
         action.plantMine = false
 
@@ -274,14 +275,26 @@ class MyStrategy {
 
         val dx = target.pos.x - currentNode.x
 
-        for (i in if (dx > 0) 0..1 else 2 downTo 1) {
-            val x = currentNode.x - i + 1
-            for (j in 0..2) {
+        if (currentNode.jumpTile >= maxJumpTiles || currentNode.y < currentNode.parentNode?.y ?: 0)
+            currentNode.jumpTile = -1
+        if (currentNode.boostJumpTile >= maxBoostJumpTiles || currentNode.y < currentNode.parentNode?.y ?: 0)
+            currentNode.boostJumpTile = -1
 
-                if (currentNode.jumpTile >= maxJumpTiles || currentNode.y < currentNode.parentNode?.y ?: 0)
-                    currentNode.jumpTile = -1
-                if (currentNode.boostJumpTile >= maxBoostJumpTiles || currentNode.y < currentNode.parentNode?.y ?: 0)
-                    currentNode.boostJumpTile = -1
+//        for (i in if (dx > 0) 0..1 else 2 downTo 1) {
+        for (i in 0..2) {
+
+            val x = when {
+                i == 0 && currentNode.y > currentNode.parentNode?.y ?: 1 -> currentNode.x
+                (i == 0 || i == 1 && currentNode.y > currentNode.parentNode?.y ?: 31) && dx > 0 ||
+                        i == 2 && dx < 0
+                -> currentNode.x + 1
+                (i == 0 || i == 1 && currentNode.y > currentNode.parentNode?.y ?: 31) && dx < 0 ||
+                        i == 2 && dx > 0 -> currentNode.x - 1
+                else -> currentNode.x
+
+            }
+
+            for (j in 0..2) {
 
                 if (j == 0 && !canGoHorizontalTile(currentNode, level, x))
                     continue
@@ -639,6 +652,7 @@ class MyStrategy {
             }
         }
         if (unit.weapon?.typ == WeaponType.ROCKET_LAUNCHER) {
+
             val r = game.properties.weaponParams[WeaponType.ROCKET_LAUNCHER]?.explosion?.radius ?: 0.0
             val dam = game.properties.weaponParams[WeaponType.ROCKET_LAUNCHER]?.explosion?.damage ?: 0
             val left =
@@ -687,6 +701,15 @@ class MyStrategy {
         deltaAngle: Double,
         bulletSize: Double
     ): Boolean {
+
+        val bulletSqr = bulletSize * bulletSize
+        if (distanceSqr(Vec2Double(tileXIndex.toDouble(), tileYIndex.toDouble()), unitCenter) <= bulletSqr ||
+            distanceSqr(Vec2Double((tileXIndex + 1).toDouble(), tileYIndex.toDouble()), unitCenter) <= bulletSqr ||
+            distanceSqr(Vec2Double((tileXIndex).toDouble(), (tileYIndex + 1).toDouble()), unitCenter) <= bulletSqr ||
+            distanceSqr(Vec2Double((tileXIndex + 1).toDouble(), (tileYIndex + 1).toDouble()), unitCenter) <= bulletSqr
+        ) {
+            return false
+        }
 
         val actualAlpha = kotlin.math.atan2(aimCenter.y - unitCenter.y, aimCenter.x - unitCenter.x)
 
