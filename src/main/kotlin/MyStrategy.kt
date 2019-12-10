@@ -66,7 +66,7 @@ class MyStrategy {
         for (lootBox in game.lootBoxes) {
             val item = lootBox.item
             val localRoute = ArrayList<Vec2Double>()
-            buildPath(unit, SquareObject(lootBox.size, lootBox.position), level, debug, localRoute)
+            buildPath(unit, SquareObject(lootBox.position, lootBox.size), level, debug, localRoute)
             localRoute.reverse()
             lootRoutes[lootBox] = localRoute
         }
