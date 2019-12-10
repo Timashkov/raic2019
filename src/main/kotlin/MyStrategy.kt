@@ -233,45 +233,23 @@ class MyStrategy {
                     continue
                 if (j == 0 && currentStep.y >= nextStep.y && currentStep.x != nextStep.x)
                     continue
-///
-                for (i in 2 downTo 0) {
-            for (j in 0..2) {
-                val act = model.UnitAction().apply {
-                    velocity = (i - 1) * vel
-                    jump = j == 0
-                    jumpDown = j == 2
-                }
-                val currentStep = route.firstOrNull { step ->
-                    step.x <= unit.position.x &&
-                            step.x + 1 > unit.position.x &&
-                            step.y <= unit.position.y && step.y + 1 > unit.position.y
-                }
-                val nextStep = if (currentStep != null && route.indexOf(currentStep) != route.size - 1) {
-                    route[route.indexOf(currentStep) + 1]
-                } else null
-
-                if (nextStep != null && currentStep != null) {
-                    if (act.jumpDown && currentStep.y <= nextStep.y && currentStep.x != nextStep.x)
-                        continue
-                    if (act.jump && currentStep.y >= nextStep.y && currentStep.x != nextStep.x)
-                        continue
-                    if (act.velocity < 0 && currentStep.x < nextStep.x) {
-                        continue
-                    }
-                    if (act.velocity > 0 && currentStep.x > nextStep.x) {
-                        continue
-                    }
-///
                 val act = model.UnitAction().apply {
                     velocity = (i - 1) * vel
                     jump = j == 0
                     jumpDown = j == 2
                 }
 
-                val pa = ProbablyAction(act, getUnitMovement(UnitMovement(unit.position, (unit.position.y - unit.position.y.toInt().toDouble()) < jumpPerTick),
+                val pa = ProbablyAction(
+                    act, getUnitMovement(
+                        UnitMovement(
+                            unit.position,
+                            (unit.position.y - unit.position.y.toInt().toDouble()) < jumpPerTick
+                        ),
                         unit.size, unit.id,
-                        act, game), 0,
-                        null)
+                        act, game
+                    ), 0,
+                    null
+                )
                 if (pa.probablyPositionAfterAction.pos.x != unit.position.x || pa.probablyPositionAfterAction.pos.y != unit.position.y)
                     nodes.add(pa)
             }
@@ -317,11 +295,21 @@ class MyStrategy {
                         jumpDown = j == 2
                     }
 
-                    val pa = ProbablyAction(act, getUnitMovement(n.probablyPositionAfterAction, unit.size,
-                            unit.id, act, game), n.currentTick + 1, n)
+                    val pa = ProbablyAction(
+                        act, getUnitMovement(
+                            n.probablyPositionAfterAction, unit.size,
+                            unit.id, act, game
+                        ), n.currentTick + 1, n
+                    )
                     if (nodes.none { it.probablyPositionAfterAction.pos.x == pa.probablyPositionAfterAction.pos.x && it.probablyPositionAfterAction.pos.y == pa.probablyPositionAfterAction.pos.y })
                         nodes.add(pa)
-                    if (objectsCollisionDetected(pa.probablyPositionAfterAction.pos, nearestWeapon.position, unit.size, nearestWeapon.size))
+                    if (objectsCollisionDetected(
+                            pa.probablyPositionAfterAction.pos,
+                            nearestWeapon.position,
+                            unit.size,
+                            nearestWeapon.size
+                        )
+                    )
                         r = pa
                 }
             }
@@ -362,8 +350,14 @@ class MyStrategy {
         val nodes = LinkedBlockingQueue<Node>()
 
         val firstNode = Node(unit.position.x.toInt(), unit.position.y.toInt())
-        if (objectsCollisionDetected(unit.position, unit.size, nearestWeapon.position, nearestWeapon.size)){
-            route.add(firstNode)
+        if (objectsCollisionDetected(
+                unit.position,
+                unit.size,
+                target.pos,
+                target.size
+            )
+        ) {
+            route.add(Vec2Double(firstNode.x.toDouble(), firstNode.y.toDouble()))
             return
         }
 
@@ -399,10 +393,38 @@ class MyStrategy {
         for (i in if (dx > 0) 0..1 else 2 downTo 1) {
             val x = currentNode.x - i + 1
             for (j in 0..2) {
-                val y = currentNode.y + j - 1
-                if (x >= 0 && x < level.size && y >= 0 && y <= level[0].size && level[x][y].type != Tile.WALL && !level[x][y].mark) {
-                    level[x][y].mark = true
-                    val node = Node(x, y, currentNode)
+                val y = currentNode.y - j + 1
+
+//                if (currentNode.jumpTile > maxJumpTiles || currentNode.boostJumpTile > maxBoostJumpTiles)
+//                    continue
+                if (currentNode.y < currentNode.parentNode?.y ?: 0 && level[currentNode.x][currentNode.y].type !in arrayOf(
+                        Tile.LADDER,
+                        Tile.PLATFORM
+                    )
+                    && j == 0
+                )
+                    continue
+
+                if (x >= 0 && x < level.size && y >= 0 && y <= level[0].size && level[x][y].type != Tile.WALL && level[x][y].mark < 10) {
+                    var n: Node? = currentNode
+                    var exist = false
+                    do {
+                        if (n?.parentNode?.x == x && n?.parentNode?.y == y) {
+                            exist = true
+                            break
+                        }
+                        n = n?.parentNode
+                    } while (n != null)
+
+                    level[x][y].mark++
+
+
+                    val node = Node(
+                        x, y,
+                        if (currentNode.jumpTile >= 0 && j == 0) currentNode.jumpTile + 1 else currentNode.jumpTile,
+                        if (currentNode.boostJumpTile >= 0 && j == 0) currentNode.boostJumpTile + 1 else currentNode.boostJumpTile,
+                        currentNode
+                    )
                     nodes.add(node)
                     if (abs(node.x + unitSize.x / 2 - target.pos.x - target.size.x / 2) < (unitSize.x / 2 + target.size.x / 2) &&
                         abs(node.y + unitSize.y / 2 - target.pos.y - target.size.y / 2) < (target.size.y / 2 + unitSize.y / 2)
@@ -582,7 +604,10 @@ class MyStrategy {
                     }
                     pos.y.toInt() >= 0 -> {
                         if (tileLeft in arrayOf(Tile.WALL, Tile.PLATFORM) ||
-                            tileRight in arrayOf(Tile.WALL, Tile.PLATFORM) && (pos.y - pos.y.toInt().toDouble()) <
+                            tileRight in arrayOf(
+                                Tile.WALL,
+                                Tile.PLATFORM
+                            ) && (pos.y - pos.y.toInt().toDouble()) <
                             jumpPerTick
                         ) {
                             jumpTick = 0
@@ -629,10 +654,10 @@ class MyStrategy {
         val tileBeforeMovingRight = game.level.tiles[(pos.x + unitSize.x / 2).toInt()][yz]
 
         if ((tileBeforeMovingLeft == Tile.WALL ||
-                        tileBeforeMovingRight == Tile.WALL ||
-                        tileBeforeMovingLeft == Tile.PLATFORM ||
-                        tileBeforeMovingRight == Tile.PLATFORM
-                        ) && (y - yz.toDouble() < jumpPerTick || y == (yz + 1).toDouble()) && y >= yz.toDouble()
+                    tileBeforeMovingRight == Tile.WALL ||
+                    tileBeforeMovingLeft == Tile.PLATFORM ||
+                    tileBeforeMovingRight == Tile.PLATFORM
+                    ) && (y - yz.toDouble() < jumpPerTick || y == (yz + 1).toDouble()) && y >= yz.toDouble()
         )
             return true
 
@@ -646,9 +671,15 @@ class MyStrategy {
         return tileBottom == Tile.LADDER || tileTop == Tile.LADDER
     }
 
-    private fun shootAllowed(unit: model.Unit, nearestEnemy: model.Unit, game: Game, debug: Debug): Boolean {
+    private fun shootAllowed(
+        unit: model.Unit,
+        nearestEnemy: model.Unit,
+        game: Game,
+        debug: Debug
+    ): Boolean {
         val unitCenter = Vec2Double(unit.position.x, unit.position.y + unit.size.y / 2)
-        val enemyCenter = Vec2Double(nearestEnemy.position.x, nearestEnemy.position.y + nearestEnemy.size.y / 2)
+        val enemyCenter =
+            Vec2Double(nearestEnemy.position.x, nearestEnemy.position.y + nearestEnemy.size.y / 2)
 
         var xl = unitCenter.x
         var xr = enemyCenter.x
@@ -674,8 +705,12 @@ class MyStrategy {
                 if (game.level.tiles[i][j].discriminant == Tile.WALL.discriminant) {
                     if (xl.toInt() == xr.toInt() || yt.toInt() == yb.toInt() ||
                         directrixTileCollision(
-                            i, j, unitCenter, enemyCenter,
-                            unit.weapon!!.spread, game.properties.weaponParams[unit.weapon!!.typ]?.bullet?.size
+                            i,
+                            j,
+                            unitCenter,
+                            enemyCenter,
+                            unit.weapon!!.spread,
+                            game.properties.weaponParams[unit.weapon!!.typ]?.bullet?.size
                                 ?: 0.0
                         )
                     /* + check for rocket and distances*/
@@ -701,14 +736,19 @@ class MyStrategy {
                 if (enemyCenter.x >= unitCenter.x) (unit.position.x + (unit.size.x / 2) + r).toInt() else unitCenter.x.toInt()
             val top =
                 if (enemyCenter.y >= unitCenter.y) (unit.position.y + (unit.size.y) + r).toInt() else unit.position.y.toInt()
-            val bottom = if (enemyCenter.y < unitCenter.y) (unit.position.y - r).toInt() else unit.position.y.toInt()
+            val bottom =
+                if (enemyCenter.y < unitCenter.y) (unit.position.y - r).toInt() else unit.position.y.toInt()
 
             for (i in left..right) {
                 for (j in bottom..top) {
                     if ((i < 0 || j < 0 || i >= game.level.tiles.size || j >= game.level.tiles[0].size || game.level.tiles[i][j].discriminant == Tile.WALL.discriminant)
                         && directrixTileCollision(
-                            i, j, unitCenter, enemyCenter,
-                            unit.weapon!!.spread, game.properties.weaponParams[WeaponType.ROCKET_LAUNCHER]?.bullet?.size
+                            i,
+                            j,
+                            unitCenter,
+                            enemyCenter,
+                            unit.weapon!!.spread,
+                            game.properties.weaponParams[WeaponType.ROCKET_LAUNCHER]?.bullet?.size
                                 ?: 0.0
                         )
                         && (dam > unit.health) && (dam < nearestEnemy.health || nearestEnemy.health > unit.health)
@@ -768,28 +808,29 @@ class MyStrategy {
     }
 
     fun objectsCollisionDetected(pos1: Vec2Double, size1: Vec2Double, pos2: Vec2Double, size2: Vec2Double) =
-            abs(pos1.x - pos2.x) < abs(size1.x / 2 + size2.x / 2) && abs(pos1.y - pos2.y) < abs(size1.y / 1 + size2.y / 2)
-
-    data class UnitMovement(
-        val pos: Vec2Double, val jumpAllowed: Boolean, val boostJump: Boolean = false,
-        val jumpTick: Int = -1, val boostJumpTick: Int = -1
-    )
-
-    data class ProbablyAction(
-        val action: model.UnitAction,
-        val probablyPositionAfterAction: UnitMovement,
-        val currentTick: Int,
-        val parentPA: ProbablyAction?
-    )
-
-    data class TileMarked(val type: Tile, var mark: Int = 0)
-    data class Node(
-        val x: Int,
-        val y: Int,
-        val jumpTile: Int = -1,
-        val boostJumpTile: Int = -1,
-        val parentNode: Node? = null
-    )
-
-    data class SquareObject(val pos: Vec2Double, val size: Vec2Double)
+        abs(pos1.x - pos2.x) < abs(size1.x / 2 + size2.x / 2) && abs(pos1.y - pos2.y) < abs(size1.y / 1 + size2.y / 2)
 }
+
+data class UnitMovement(
+    val pos: Vec2Double, val jumpAllowed: Boolean, val boostJump: Boolean = false,
+    val jumpTick: Int = -1, val boostJumpTick: Int = -1
+)
+
+data class ProbablyAction(
+    val action: model.UnitAction,
+    val probablyPositionAfterAction: UnitMovement,
+    val currentTick: Int,
+    val parentPA: ProbablyAction?
+)
+
+data class TileMarked(val type: Tile, var mark: Int = 0)
+data class Node(
+    val x: Int,
+    val y: Int,
+    val jumpTile: Int = -1,
+    val boostJumpTile: Int = -1,
+    val parentNode: Node? = null
+)
+
+data class SquareObject(val pos: Vec2Double, val size: Vec2Double)
+
