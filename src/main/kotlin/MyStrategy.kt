@@ -26,6 +26,7 @@ class MyStrategy {
     private var enemyIndex = 0
     private val route = ArrayList<Node>()
     private var prevPoint: Node? = null
+    private var nextPoint: Node? = null
     private var nearestEnemy: model.Unit? = null
 
 
@@ -83,7 +84,7 @@ class MyStrategy {
                                     debug,
                                     localRoute,
                                     knownRoot?.size ?: Int.MAX_VALUE,
-                                    prevPoint
+                                    nextPoint
                                 )
                                 if (localRoute.isNotEmpty() && localRoute.size < knownRoot?.size ?: Int.MAX_VALUE) {
                                     localRoute.reverse()
@@ -105,7 +106,7 @@ class MyStrategy {
                                     debug,
                                     localRoute,
                                     knownRoot?.size ?: Int.MAX_VALUE,
-                                    prevPoint
+                                    nextPoint
                                 )
                                 if (localRoute.isNotEmpty() && localRoute.size < knownRoot?.size ?: Int.MAX_VALUE) {
                                     localRoute.reverse()
@@ -128,7 +129,7 @@ class MyStrategy {
                             debug,
                             localRoute,
                             Int.MAX_VALUE,
-                            prevPoint
+                            nextPoint
                         )
                         localRoute.reverse()
                         localRoute
@@ -147,6 +148,8 @@ class MyStrategy {
                     )
         ) {
             prevPoint = route[0]
+            if (route.size >= 2)
+                nextPoint = route[1]
             route.removeAt(0)
         }
 
@@ -240,7 +243,7 @@ class MyStrategy {
     ) {
         val nodes = LinkedBlockingQueue<Node>()
 
-        val firstNode = Node(
+        val firstNode = knownNode ?: Node(
             unit.position.x.toInt(),
             unit.position.y.toInt(),
             jumpTile = knownNode?.jumpTile ?: -1,
