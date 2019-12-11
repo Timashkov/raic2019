@@ -194,6 +194,9 @@ class MyStrategy {
             action.shoot = false
         } else {
             action.shoot = shootAllowed(unit, nearestEnemy, game, debug)
+            if (!action.shoot && unit.weapon?.params?.magazineSize != unit.weapon?.magazine) {
+                action.reload = true
+            }
         }
         action.swapWeapon = false
         action.plantMine = false
@@ -296,40 +299,38 @@ class MyStrategy {
 
             for (j in 0..2) {
 
-                if (j == 0 && !canGoHorizontalTile(currentNode, level, x))
-                    continue
-
-                if (j == 1 && !canGoUpTile(currentNode, level, x))
-                    continue
-
                 val y = when (j) {
                     0 -> currentNode.y
                     1 -> currentNode.y + 1
                     else -> currentNode.y - 1
                 }
 
-                if (x >= 0 && x < level.size && y >= 0 && y <= level[0].size && level[x][y].type != Tile.WALL && level[x][y].mark < 10) {
-                    var n: Node? = currentNode
-                    var exist = false
-                    do {
-                        if (n?.parentNode?.x == x && n.parentNode?.y == y) {
-                            exist = true
-                            break
-                        }
-                        n = n?.parentNode
-                    } while (n != null)
+                if (currentNode.y == y && !canGoHorizontalTile(currentNode, level, x))
+                    continue
 
+                if (currentNode.y == y - 1 && !canGoUpTile(currentNode, level, x)) {
+                    continue
+                }
+
+                if (x >= 0 &&
+                    x < level.size &&
+                    y >= 0 &&
+                    y < level[0].size - 1 &&
+                    level[x][y].type != Tile.WALL &&
+                    level[x][y + 1].type != Tile.WALL &&
+                    level[x][y].mark < 10
+                ) {
                     level[x][y].mark++
 
                     val node = Node(
                         x, y,
-                        if (currentNode.jumpTile >= 0 && j == 0) currentNode.jumpTile + 1 else currentNode.jumpTile,
-                        if (currentNode.boostJumpTile >= 0 && j == 0) currentNode.boostJumpTile + 1 else currentNode.boostJumpTile,
+                        if (currentNode.jumpTile >= 0 && y == currentNode.y + 1) currentNode.jumpTile + 1 else currentNode.jumpTile,
+                        if (currentNode.boostJumpTile >= 0 && y == currentNode.y + 1) currentNode.boostJumpTile + 1 else currentNode.boostJumpTile,
                         currentNode
                     )
                     nodes.add(node)
-                    if (abs(node.x + unitSize.x / 2 - target.pos.x - target.size.x / 2) < (unitSize.x / 2 + target.size.x / 2) &&
-                        abs(node.y + unitSize.y / 2 - target.pos.y - target.size.y / 2) < (target.size.y / 2 + unitSize.y / 2)
+                    if (abs(node.x + unitSize.x / 2 - target.pos.x) < (unitSize.x / 2 + target.size.x / 2) &&
+                        abs(node.y + unitSize.y / 2 - target.pos.y) < (target.size.y / 2 + unitSize.y / 2)
                     )
                         return node
                 }
@@ -347,17 +348,26 @@ class MyStrategy {
             level[currentNode.x][currentNode.y - 1].type == Tile.EMPTY
         )
             return false
-        if (currentNode.y == 0 || level[currentNode.x][currentNode.y - 1].type != Tile.EMPTY) {
+        if ((currentNode.y == 0 ||
+                    level[currentNode.x][currentNode.y - 1].type != Tile.EMPTY) &&
+            currentNode.boostJumpTile + currentNode.jumpTile == -2
+        ) {
             currentNode.boostJumpTile = 0
             currentNode.jumpTile = 0
         }
-        if (currentNode.y >= level[0].size - unitHeight || currentNode.jumpTile == -1 || currentNode.boostJumpTile == -1)
+        if (currentNode.y >= (level[0].size - unitHeight).toInt() ||
+            level[currentNode.x][currentNode.y + 2].type == Tile.WALL ||
+            level[currentNode.x][currentNode.parentNode?.y ?: currentNode.y + 2].type == Tile.WALL ||
+            currentNode.jumpTile == -1 || currentNode.boostJumpTile == -1
+        )
             return false
         return true
     }
 
     private fun canGoHorizontalTile(currentNode: Node, level: ArrayList<ArrayList<TileMarked>>, newX: Int): Boolean {
-        return currentNode.y == 0 || (level[currentNode.x][currentNode.y - 1].type != Tile.EMPTY && level[newX][currentNode.y - 1].type != Tile.EMPTY)
+        return currentNode.y == 0 ||
+                (level[currentNode.x][currentNode.y - 1].type != Tile.EMPTY &&
+                        level[newX][currentNode.y - 1].type != Tile.EMPTY)
     }
 
     private fun getVelocity(xCurrent: Double, xTarget: Double): Double {
