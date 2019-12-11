@@ -284,56 +284,60 @@ class MyStrategy {
             currentNode.boostJumpTile = -1
 
 //        for (i in if (dx > 0) 0..1 else 2 downTo 1) {
-        for (i in 0..2) {
+        for (i in 0..7) {
 
-            val x = when {
-                i == 0 && currentNode.y > currentNode.parentNode?.y ?: 1 -> currentNode.x
-                (i == 0 || i == 1 && currentNode.y > currentNode.parentNode?.y ?: 31) && dx > 0 ||
-                        i == 2 && dx < 0
-                -> currentNode.x + 1
-                (i == 0 || i == 1 && currentNode.y > currentNode.parentNode?.y ?: 31) && dx < 0 ||
-                        i == 2 && dx > 0 -> currentNode.x - 1
-                else -> currentNode.x
-
+            val direction = Vec2Int(currentNode.x, currentNode.y)
+            when (i) {
+                0 -> direction.apply { x += if (dx > 0) 1 else -1 }
+                1 -> direction.apply { y += 1 }
+                2 -> direction.apply { x -= if (dx > 0) 1 else -1 }
+                3 -> direction.apply { y -= 1 }
+                4 -> direction.apply {
+                    x += if (dx > 0) 1 else -1
+                    y += 1
+                }
+                5 -> direction.apply {
+                    x -= if (dx > 0) 1 else -1
+                    y += 1
+                }
+                6 -> direction.apply {
+                    x += if (dx > 0) 1 else -1
+                    y -= 1
+                }
+                else -> direction.apply {
+                    x -= if (dx > 0) 1 else -1
+                    y -= 1
+                }
             }
 
-            for (j in 0..2) {
+            if (currentNode.y == direction.y && !canGoHorizontalTile(currentNode, level, direction.x))
+                continue
 
-                val y = when (j) {
-                    0 -> currentNode.y
-                    1 -> currentNode.y + 1
-                    else -> currentNode.y - 1
-                }
+            if (currentNode.y == direction.y - 1 && !canGoUpTile(currentNode, level, direction.x)) {
+                continue
+            }
 
-                if (currentNode.y == y && !canGoHorizontalTile(currentNode, level, x))
-                    continue
+            if (direction.x >= 0 &&
+                direction.x < level.size &&
+                direction.y >= 0 &&
+                direction.y < level[0].size - 1 &&
+                level[direction.x][direction.y].type != Tile.WALL &&
+                level[direction.x][direction.y + 1].type != Tile.WALL &&
+                level[direction.x][direction.y].mark < 10
+            ) {
+                level[direction.x][direction.y].mark++
 
-                if (currentNode.y == y - 1 && !canGoUpTile(currentNode, level, x)) {
-                    continue
-                }
-
-                if (x >= 0 &&
-                    x < level.size &&
-                    y >= 0 &&
-                    y < level[0].size - 1 &&
-                    level[x][y].type != Tile.WALL &&
-                    level[x][y + 1].type != Tile.WALL &&
-                    level[x][y].mark < 10
-                ) {
-                    level[x][y].mark++
-
-                    val node = Node(
-                        x, y,
-                        if (currentNode.jumpTile >= 0 && y == currentNode.y + 1) currentNode.jumpTile + 1 else currentNode.jumpTile,
-                        if (currentNode.boostJumpTile >= 0 && y == currentNode.y + 1) currentNode.boostJumpTile + 1 else currentNode.boostJumpTile,
-                        currentNode
-                    )
-                    nodes.add(node)
-                    if (abs(node.x + unitSize.x / 2 - target.pos.x) < (unitSize.x / 2 + target.size.x / 2) &&
-                        abs(node.y + unitSize.y / 2 - target.pos.y) < (target.size.y / 2 + unitSize.y / 2)
-                    )
-                        return node
-                }
+                val node = Node(
+                    direction.x, direction.y,
+                    if (currentNode.jumpTile >= 0 && direction.y == currentNode.y + 1) currentNode.jumpTile + 1 else currentNode.jumpTile,
+                    if (currentNode.boostJumpTile >= 0 && direction.y == currentNode.y + 1) currentNode.boostJumpTile + 1 else currentNode.boostJumpTile,
+                    currentNode
+                )
+                nodes.add(node)
+                if (abs(node.x + unitSize.x / 2 - target.pos.x) < (unitSize.x / 2 + target.size.x / 2) &&
+                    abs(node.y + unitSize.y / 2 - target.pos.y) < (target.size.y / 2 + unitSize.y / 2)
+                )
+                    return node
             }
         }
 
@@ -366,7 +370,8 @@ class MyStrategy {
 
     private fun canGoHorizontalTile(currentNode: Node, level: ArrayList<ArrayList<TileMarked>>, newX: Int): Boolean {
         return currentNode.y == 0 ||
-                (level[currentNode.x][currentNode.y - 1].type != Tile.EMPTY &&
+                (newX < level.size &&
+                        level[currentNode.x][currentNode.y - 1].type != Tile.EMPTY &&
                         level[newX][currentNode.y - 1].type != Tile.EMPTY)
     }
 
@@ -754,6 +759,8 @@ class MyStrategy {
     fun objectsCollisionDetected(pos1: Vec2Double, size1: Vec2Double, pos2: Vec2Double, size2: Vec2Double) =
         abs(pos1.x - pos2.x) < abs(size1.x / 2 + size2.x / 2) && abs(pos1.y - pos2.y) < abs(size1.y / 1 + size2.y / 2)
 }
+
+data class Vec2Int(var x: Int = 0, var y: Int = 0)
 
 data class UnitMovement(
     val pos: Vec2Double, val jumpAllowed: Boolean, val boostJump: Boolean = false,
