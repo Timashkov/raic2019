@@ -54,7 +54,7 @@ class MyStrategy {
 
         for (other in game.units) {
             if (other.playerId != unit.playerId) {
-                if (nearestEnemy == null || distanceSqr(
+                if (nearestEnemy?.id == other.id || distanceSqr(
                         unit.position,
                         other.position
                     ) < distanceSqr(unit.position, nearestEnemy?.position ?: Vec2Double(0.0, 0.0))
