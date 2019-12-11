@@ -23,14 +23,13 @@ class MyStrategy {
     private var ticksPerSec = 0.0
     private lateinit var unitMovement: UnitMovement
     private var unitHeight = 0.0
-    private var index = 0
-    private val route = ArrayList<Vec2Double>()
-    private val lootRoutes = HashMap<LootBox, ArrayList<Vec2Double>>()
-    //    private var pa: ArrayList<ProbablyAction>? = null
-    private var prevPoint: Vec2Double? = null
+    private var enemyIndex = 0
+    private val route = ArrayList<Node>()
+    private var prevPoint: Node? = null
+    private var nearestEnemy: model.Unit? = null
+
 
     fun getAction(unit: model.Unit, game: Game, debug: Debug): UnitAction {
-        var nearestEnemy: model.Unit? = null
 
         if (boostJumpPerTick == 0.0) {
             maxDXPerTick = game.properties.unitMaxHorizontalSpeed / game.properties.ticksPerSecond
@@ -57,7 +56,7 @@ class MyStrategy {
                 if (nearestEnemy == null || distanceSqr(
                         unit.position,
                         other.position
-                    ) < distanceSqr(unit.position, nearestEnemy.position)
+                    ) < distanceSqr(unit.position, nearestEnemy?.position ?: Vec2Double(0.0, 0.0))
                 ) {
                     nearestEnemy = other
                 }
@@ -65,47 +64,71 @@ class MyStrategy {
         }
 
 
-        if (route.isEmpty()) {
-            lootRoutes.clear()
-            for (lootBox in game.lootBoxes) {
-                val localRoute = ArrayList<Vec2Double>()
-                buildPath(unit, SquareObject(lootBox.position, lootBox.size), level, debug, localRoute)
-                localRoute.reverse()
-                level.forEach { it.forEach { jt -> jt.mark = 0 } }
-                lootRoutes[lootBox] = localRoute
-            }
-            var nearestWeapon: LootBox? = null
-            var nearestHealthPack: LootBox? = null
-            lootRoutes.forEach { lootbox, route ->
-                if (lootbox.item is Item.Weapon) {
-                    if (nearestWeapon == null || route.size < lootRoutes[nearestWeapon as LootBox]?.size ?: 0) {
-                        nearestWeapon = lootbox
-                    }
-                }
-                if (lootbox.item is Item.HealthPack) {
-                    if (nearestHealthPack == null || route.size < lootRoutes[nearestHealthPack as LootBox]?.size ?: 0) {
-                        nearestHealthPack = lootbox
-                    }
-                }
-            }
-
+        if (route.isEmpty() || enemyIndex >= 3) {
+            enemyIndex = 0
             route.clear()
             route.addAll(
                 when {
                     unit.health <= game.properties.unitMaxHealth - game.properties.healthPackHealth &&
-                            nearestHealthPack != null -> lootRoutes[nearestHealthPack!!] ?: ArrayList()
-                    unit.weapon == null && nearestWeapon != null -> lootRoutes[nearestWeapon!!] ?: ArrayList()
+                            game.lootBoxes.any { it.item is Item.HealthPack } -> {
+
+                        var knownRoot: ArrayList<Node>? = null
+                        for (lootBox in game.lootBoxes) {
+                            if (lootBox.item is Item.HealthPack) {
+                                val localRoute = ArrayList<Node>()
+                                buildPath(
+                                    unit,
+                                    SquareObject(lootBox.position, lootBox.size),
+                                    level,
+                                    debug,
+                                    localRoute,
+                                    knownRoot?.size ?: Int.MAX_VALUE,
+                                    prevPoint
+                                )
+                                if (localRoute.isNotEmpty() && localRoute.size < knownRoot?.size ?: Int.MAX_VALUE) {
+                                    localRoute.reverse()
+                                    knownRoot = localRoute
+                                }
+                            }
+                        }
+                        knownRoot ?: ArrayList()
+                    }
+                    unit.weapon == null && game.lootBoxes.any { it.item is Item.Weapon } -> {
+                        var knownRoot: ArrayList<Node>? = null
+                        for (lootBox in game.lootBoxes) {
+                            if (lootBox.item is Item.Weapon) {
+                                val localRoute = ArrayList<Node>()
+                                buildPath(
+                                    unit,
+                                    SquareObject(lootBox.position, lootBox.size),
+                                    level,
+                                    debug,
+                                    localRoute,
+                                    knownRoot?.size ?: Int.MAX_VALUE,
+                                    prevPoint
+                                )
+                                if (localRoute.isNotEmpty() && localRoute.size < knownRoot?.size ?: Int.MAX_VALUE) {
+                                    localRoute.reverse()
+                                    knownRoot = localRoute
+                                }
+                            }
+                        }
+                        knownRoot ?: ArrayList()
+                    }
                     else -> {
-                        val localRoute = ArrayList<Vec2Double>()
+                        val localRoute = ArrayList<Node>()
+                        val enSquare = SquareObject(
+                            pos = nearestEnemy?.position ?: Vec2Double(0.0, 0.0),
+                            size = nearestEnemy?.size ?: Vec2Double(0.0, 0.0)
+                        )
                         buildPath(
                             unit,
-                            SquareObject(
-                                nearestEnemy?.size ?: Vec2Double(0.0, 0.0),
-                                nearestEnemy?.position ?: Vec2Double(0.0, 0.0)
-                            ),
+                            enSquare,
                             level,
                             debug,
-                            localRoute
+                            localRoute,
+                            Int.MAX_VALUE,
+                            prevPoint
                         )
                         localRoute.reverse()
                         localRoute
@@ -127,16 +150,6 @@ class MyStrategy {
             route.removeAt(0)
         }
 
-//        if (game.currentTick == 0 || route.isEmpty()) {
-//
-//
-//            buildPath(unit, targetObj, level, debug, route)
-//            route.reverse()
-////                pa = buildPathForNearestWeapon2(unit, nearestWeapon, game, debug, route)
-////                pa?.reverse()
-//
-//        }
-
         if (route.isNotEmpty()) {
             route.forEach { step ->
                 debug.draw(
@@ -152,40 +165,28 @@ class MyStrategy {
             }
         }
 
-        val targetPos = if (route.isEmpty())
+        val targetPos = if (route.isEmpty()) {
             nearestEnemy?.position ?: Vec2Double(0.5, 0.5)
-        else
-            Vec2Double(route[0].x + 0.5, route[0].y)
-
+        } else {
+            if (nearestEnemy != null)
+            //if (unit.weapon != null)
+                enemyIndex++
+            Vec2Double(route[0].x + 0.5, route[0].y.toDouble())
+        }
         var aim = Vec2Double(0.0, 0.0)
-        if (nearestEnemy != null) {
+        nearestEnemy?.let {
             aim = Vec2Double(
-                (nearestEnemy.position.x - unit.position.x) * 10,
-                (nearestEnemy.position.y - unit.position.y) * 10
+                (it.position.x - unit.position.x) * 10,
+                (it.position.y - unit.position.y) * 10
             )
         }
 
-//        var action = if (index < pa?.size ?: -1) {
-//            index++
-//            pa?.get(index - 1)?.action
-//
-//        } else null
-
-//        if (action == null) {
         val action = UnitAction()
-//        var jump = targetPos.y > unit.position.y
-//        if (targetPos.x > unit.position.x && game.level.tiles[(unit.position.x + 1).toInt()][(unit.position.y).toInt()] == Tile.WALL) {
-//            jump = true
-//        }
-//        if (targetPos.x < unit.position.x && game.level.tiles[(unit.position.x - 1).toInt()][(unit.position.y).toInt()] == Tile.WALL) {
-//            jump = true
-//        }
 
         action.velocity = getVelocity(unit.position.x, targetPos.x)
-        action.jump = targetPos.y > prevPoint?.y ?: 0.0 || targetPos.y > unit.position.y
-        action.jumpDown = targetPos.y < prevPoint?.y ?: 31.0 && targetPos.y < unit.position.y
+        action.jump = targetPos.y > prevPoint?.y?.toDouble() ?: 0.0 || targetPos.y > unit.position.y
+        action.jumpDown = targetPos.y < prevPoint?.y?.toDouble() ?: 31.0 && targetPos.y < unit.position.y
 
-//        }
         action.aim = aim
 //        action.reload = false
 
@@ -233,11 +234,19 @@ class MyStrategy {
         target: SquareObject,
         level: ArrayList<ArrayList<TileMarked>>,
         debug: Debug,
-        route: ArrayList<Vec2Double>
+        route: ArrayList<Node>,
+        maxRouteSize: Int,
+        knownNode: Node? = null
     ) {
         val nodes = LinkedBlockingQueue<Node>()
 
-        val firstNode = Node(unit.position.x.toInt(), unit.position.y.toInt())
+        val firstNode = Node(
+            unit.position.x.toInt(),
+            unit.position.y.toInt(),
+            jumpTile = knownNode?.jumpTile ?: -1,
+            boostJumpTile = knownNode?.boostJumpTile ?: -1
+        )
+
         if (objectsCollisionDetected(
                 unit.position,
                 unit.size,
@@ -245,7 +254,7 @@ class MyStrategy {
                 target.size
             )
         ) {
-            route.add(Vec2Double(firstNode.x.toDouble(), firstNode.y.toDouble()))
+            route.add(firstNode.parentLessClone())
             return
         }
 
@@ -255,13 +264,17 @@ class MyStrategy {
 
         while (nodes.isNotEmpty() && r == null) {
             val n = nodes.poll()
+            if (n.gen > maxRouteSize)
+                continue
             r = checkTiles(n, unit.size, target, level, debug, nodes)
         }
+
+        level.forEach { it.forEach { jt -> jt.mark = 0 } }
 
         r?.let {
             var qq = it
             do {
-                route.add(Vec2Double(qq.x.toDouble(), qq.y.toDouble()))
+                route.add(qq.parentLessClone())
                 qq = qq.parentNode ?: return
             } while (qq != null)
         }
@@ -323,19 +336,32 @@ class MyStrategy {
                 direction.y < level[0].size - 1 &&
                 level[direction.x][direction.y].type != Tile.WALL &&
                 level[direction.x][direction.y + 1].type != Tile.WALL &&
-                level[direction.x][direction.y].mark < 10
+                nearestEnemyIsNotBreak(direction, currentNode) &&
+                level[direction.x][direction.y].mark < 10 &&
+                nodes.none {
+                    it.x == direction.x && it.y == direction.y &&
+                            (it.gen == currentNode.gen + 1 || it.jumpTile == currentNode.jumpTile && it.boostJumpTile == currentNode.boostJumpTile)
+                }
             ) {
+
                 level[direction.x][direction.y].mark++
 
                 val node = Node(
                     direction.x, direction.y,
                     if (currentNode.jumpTile >= 0 && direction.y == currentNode.y + 1) currentNode.jumpTile + 1 else currentNode.jumpTile,
                     if (currentNode.boostJumpTile >= 0 && direction.y == currentNode.y + 1) currentNode.boostJumpTile + 1 else currentNode.boostJumpTile,
+                    currentNode.gen + 1,
                     currentNode
                 )
                 nodes.add(node)
                 if (abs(node.x + unitSize.x / 2 - target.pos.x) < (unitSize.x / 2 + target.size.x / 2) &&
                     abs(node.y + unitSize.y / 2 - target.pos.y) < (target.size.y / 2 + unitSize.y / 2)
+                )
+                    return node
+
+                if (target.pos.x == nearestEnemy?.position?.x &&
+                    target.pos.y == nearestEnemy?.position?.y && abs(node.x + unitSize.x / 2 - target.pos.x) < (unitSize.x + target.size.x) &&
+                    abs(node.y + unitSize.y / 2 - target.pos.y) < (target.size.y + unitSize.y)
                 )
                     return node
             }
@@ -349,7 +375,9 @@ class MyStrategy {
         if (currentNode.y < currentNode.parentNode?.y ?: 0 &&
             level[currentNode.x][currentNode.y].type != Tile.LADDER &&
             currentNode.y > 0 &&
-            level[currentNode.x][currentNode.y - 1].type == Tile.EMPTY
+            level[currentNode.x][currentNode.y - 1].type == Tile.EMPTY &&
+            (abs((nearestEnemy?.position?.y ?: 31.0) + (nearestEnemy?.size?.y ?: 0.0) - currentNode.y) > jumpPerTick ||
+                    abs(nearestEnemy?.position?.x ?: -1.0 - currentNode.x) > 1)
         )
             return false
         if ((currentNode.y == 0 ||
@@ -360,9 +388,13 @@ class MyStrategy {
             currentNode.jumpTile = 0
         }
         if (currentNode.y >= (level[0].size - unitHeight).toInt() ||
-            level[currentNode.x][currentNode.y + 2].type == Tile.WALL ||
-            level[currentNode.x][currentNode.parentNode?.y ?: currentNode.y + 2].type == Tile.WALL ||
-            currentNode.jumpTile == -1 || currentNode.boostJumpTile == -1
+            level[currentNode.x][currentNode.y + 1].type == Tile.WALL ||
+            level[currentNode.x][currentNode.parentNode?.y ?: currentNode.y + 1].type == Tile.WALL ||
+            currentNode.jumpTile == -1 ||
+            currentNode.boostJumpTile == -1 ||
+            ((nearestEnemy?.position?.y ?: 31.0) - unitHeight <= currentNode.y &&
+                    (nearestEnemy?.position?.y ?: 31.0) + (nearestEnemy?.size?.y ?: 0.0) > currentNode.y &&
+                    abs(nearestEnemy?.position?.x ?: -1.0 - currentNode.x) <= 1)
         )
             return false
         return true
@@ -384,6 +416,21 @@ class MyStrategy {
         } else {
             dx * ticksPerSec
         }
+    }
+
+    private fun nearestEnemyIsNotBreak(direction: Vec2Int, currentNode: Node): Boolean {
+        nearestEnemy?.let { enemy ->
+            return if (direction.x > currentNode.x) {
+                direction.x < enemy.position.x - enemy.size.x * 2 ||
+                        (direction.y > (enemy.position.y + enemy.size.y) ||
+                                direction.y + unitHeight < enemy.position.y)
+            } else {
+                direction.x > enemy.position.x + enemy.size.x * 2 ||
+                        (direction.y > (enemy.position.y + enemy.size.y) ||
+                                direction.y + unitHeight < enemy.position.y)
+            }
+        }
+        return true
     }
 
     private fun getUnitMovement(
@@ -612,10 +659,12 @@ class MyStrategy {
 
     private fun shootAllowed(
         unit: model.Unit,
-        nearestEnemy: model.Unit,
+        nearestEnemy: model.Unit?,
         game: Game,
         debug: Debug
     ): Boolean {
+        if (nearestEnemy == null)
+            return false
         val unitCenter = Vec2Double(unit.position.x, unit.position.y + unit.size.y / 2)
         val enemyCenter =
             Vec2Double(nearestEnemy.position.x, nearestEnemy.position.y + nearestEnemy.size.y / 2)
@@ -723,7 +772,7 @@ class MyStrategy {
             distanceSqr(Vec2Double((tileXIndex).toDouble(), (tileYIndex + 1).toDouble()), unitCenter) <= bulletSqr ||
             distanceSqr(Vec2Double((tileXIndex + 1).toDouble(), (tileYIndex + 1).toDouble()), unitCenter) <= bulletSqr
         ) {
-            return false
+            return true
         }
 
         val actualAlpha = kotlin.math.atan2(aimCenter.y - unitCenter.y, aimCenter.x - unitCenter.x)
@@ -780,10 +829,19 @@ data class Node(
     val y: Int,
     var jumpTile: Int = -1,
     var boostJumpTile: Int = -1,
+    val gen: Int = 0,
     val parentNode: Node? = null
-)
+) {
+    fun parentLessClone(): Node {
+        return Node(x = this.x, y = this.y, jumpTile = this.jumpTile, boostJumpTile = this.boostJumpTile)
+    }
+}
 
-data class SquareObject(val pos: Vec2Double, val size: Vec2Double)
+data class SquareObject(val pos: Vec2Double, val size: Vec2Double) {
+    override fun toString(): String {
+        return "pos: ${pos.x}:${pos.y} , size: ${size.x}:${size.y}"
+    }
+}
 
 
 //    private fun buildPathForNearestWeapon2(
