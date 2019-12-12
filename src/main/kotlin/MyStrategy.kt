@@ -21,7 +21,7 @@ class MyStrategy {
     private var maxJumpTiles = 0.0
     private var maxBoostJumpTiles = 0.0
     private var ticksPerSec = 0.0
-    private lateinit var unitMovement: UnitMovement
+    //private lateinit var unitMovement: UnitMovement
     private var unitHeight = 0.0
     private var unitWidth = 0.0
     private var enemyIndex = 0
@@ -57,7 +57,7 @@ class MyStrategy {
 
         for (other in game.units) {
             if (other.playerId != unit.playerId) {
-                if (nearestEnemy?.id == other.id || distanceSqr(
+                if (nearestEnemy == null || nearestEnemy?.id == other.id || distanceSqr(
                         unit.position,
                         other.position
                     ) < distanceSqr(unit.position, nearestEnemy?.position ?: Vec2Double(0.0, 0.0))
@@ -148,11 +148,8 @@ class MyStrategy {
         if (route.isNotEmpty() &&
             route[0].x <= unit.position.x &&
             (route[0].x + 1) >= unit.position.x &&
-            (route.size == 1 || route[1].x != route[0].x ||
-                    (route[0].y <= unit.position.y &&
-                            (route[0].y) + 1 >= unit.position.y
-                            )
-                    )
+            route[0].y <= unit.position.y &&
+            (route[0].y) + 2 >= unit.position.y
         ) {
             prevPoint = route[0]
             if (route.size >= 2)
@@ -211,36 +208,37 @@ class MyStrategy {
             action.shoot = false
         } else {
             action.shoot = shootAllowed(unit, nearestEnemy, game, debug)
-            if (!action.shoot && unit.weapon?.params?.magazineSize != unit.weapon?.magazine) {
-                action.reload = true
-            }
+// add intelli
+//            if (!action.shoot && unit.weapon?.params?.magazineSize != unit.weapon?.magazine) {
+//                action.reload = true
+//            }
         }
         action.swapWeapon = false
         action.plantMine = false
 
-        if (!::unitMovement.isInitialized)
-            unitMovement = UnitMovement(unit.position, unit.onGround)
-        else
-            unitMovement.apply {
-                pos.x = unit.position.x
-                pos.y = unit.position.y
-            }
-
-        unitMovement = getUnitMovement(unitMovement, unit.size, unit.id, action, game)
-        debug.draw(
-            CustomData.Rect(
-                Vec2Float(unitMovement.pos.x.toFloat() - 0.2f, unitMovement.pos.y.toFloat() - 0.2f),
-                Vec2Float(0.4f, 0.4f),
-                ColorFloat(0f, 255f, 0f, 255f)
-            )
-        )
-        debug.draw(
-            CustomData.Rect(
-                Vec2Float(unit.position.x.toFloat() - 0.1f, unit.position.y.toFloat() - 0.1f),
-                Vec2Float(0.2f, 0.2f),
-                ColorFloat(0f, 0f, 255f, 255f)
-            )
-        )
+//        if (!::unitMovement.isInitialized)
+//            unitMovement = UnitMovement(unit.position, unit.onGround)
+//        else
+//            unitMovement.apply {
+//                pos.x = unit.position.x
+//                pos.y = unit.position.y
+//            }
+//
+//        unitMovement = getUnitMovement(unitMovement, unit.size, unit.id, action, game)
+//        debug.draw(
+//            CustomData.Rect(
+//                Vec2Float(unitMovement.pos.x.toFloat() - 0.2f, unitMovement.pos.y.toFloat() - 0.2f),
+//                Vec2Float(0.4f, 0.4f),
+//                ColorFloat(0f, 255f, 0f, 255f)
+//            )
+//        )
+//        debug.draw(
+//            CustomData.Rect(
+//                Vec2Float(unit.position.x.toFloat() - 0.1f, unit.position.y.toFloat() - 0.1f),
+//                Vec2Float(0.2f, 0.2f),
+//                ColorFloat(0f, 0f, 255f, 255f)
+//            )
+//        )
 
         return action
     }
@@ -314,7 +312,6 @@ class MyStrategy {
 
 //        for (i in if (dx > 0) 0..1 else 2 downTo 1) {
         for (i in 0..7) {
-
             val direction = Vec2Int(currentNode.x, currentNode.y)
             when (i) {
                 0 -> direction.apply { x += if (dx > 0) 1 else -1 }
@@ -413,9 +410,10 @@ class MyStrategy {
                     abs(nearestEnemy?.position?.x ?: -1.0 - currentNode.x) > 1)
         )
             return false
-        if ((currentNode.y == 0 ||
-                    level[currentNode.x][currentNode.y - 1].type != Tile.EMPTY) &&
-            (currentNode.jumpTile != 0)
+        if (currentNode.jumpTile != 0 && (currentNode.y == 0 ||
+                    level[currentNode.x][currentNode.y - 1].type != Tile.EMPTY ||
+                    (abs((nearestEnemy?.position?.y ?: 0.0) + unitHeight - currentNode.y) <= jumpPerTick &&
+                            abs(nearestEnemy?.position?.x ?: -1.0 - currentNode.x) <= 1))
         ) {
             currentNode.jumpTile = 0
         }
