@@ -69,7 +69,8 @@ class MyStrategy {
 
         if (unit.health <= game.properties.unitMaxHealth * 2.0 / 3.0 && route.isNotEmpty()) {
             val pos = Vec2Int(route[route.size - 1].x, route[route.size - 1].y)
-            if (game.lootBoxes.any { it.item is Item.HealthPack && it.position.x.toInt() == pos.x && it.position.y.toInt() == pos.y })
+            if (game.lootBoxes.none { it.item is Item.HealthPack && it.position.x.toInt() == pos.x && it.position.y.toInt() == pos.y } &&
+                game.lootBoxes.any { it.item is Item.HealthPack })
                 route.clear()
         }
 
