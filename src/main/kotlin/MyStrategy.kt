@@ -67,6 +67,12 @@ class MyStrategy {
             }
         }
 
+        if (unit.health <= game.properties.unitMaxHealth * 2.0 / 3.0 && route.isNotEmpty()) {
+            val pos = Vec2Int(route[route.size - 1].x, route[route.size - 1].y)
+            if (game.lootBoxes.any { it.item is Item.HealthPack && it.position.x.toInt() == pos.x && it.position.y.toInt() == pos.y })
+                route.clear()
+        }
+
 
         if (route.isEmpty() || enemyIndex >= 5 || attempts > 5) {
             enemyIndex = 0
@@ -74,7 +80,7 @@ class MyStrategy {
             route.clear()
             route.addAll(
                 when {
-                    unit.health <= game.properties.unitMaxHealth - game.properties.healthPackHealth &&
+                    unit.health <= game.properties.unitMaxHealth * 2.0 / 3.0 &&
                             game.lootBoxes.any { it.item is Item.HealthPack } -> {
 
                         val localRoute = ArrayList<Node>()
