@@ -307,8 +307,16 @@ class MyStrategy {
 
         if (currentNode.jumpTile >= maxJumpTiles.toInt() || currentNode.y < currentNode.parentNode?.y ?: 0)
             currentNode.jumpTile = -1
-//        if (currentNode.boostJumpTile >= maxBoostJumpTiles || currentNode.y < currentNode.parentNode?.y ?: 0)
-//            currentNode.boostJumpTile = -1
+        if (currentNode.boostJumpTile >= maxBoostJumpTiles.toInt() || currentNode.y < currentNode.parentNode?.y ?: 0)
+            currentNode.boostJumpTile = -1
+        if (currentNode.boostJumpTile != 0 && (level[currentNode.x][currentNode.y].type == Tile.JUMP_PAD || (currentNode.y > 0 && level[currentNode.x][currentNode.y - 1].type == Tile.JUMP_PAD))) {
+            currentNode.boostJumpTile = 0
+        }
+        val canGoUp = canGoUpTile(currentNode, level)
+        if (!canGoUp) {
+            currentNode.boostJumpTile = -1
+            currentNode.jumpTile = -1
+        }
 
 //        for (i in if (dx > 0) 0..1 else 2 downTo 1) {
         for (i in 0..7) {
@@ -342,7 +350,7 @@ class MyStrategy {
             if (currentNode.y == direction.y && !canGoHorizontalTile(currentNode, level, direction.x))
                 continue
 
-            if (currentNode.y + 1 == direction.y && !canGoUpTile(currentNode, level, direction.x)) {
+            if (currentNode.y + 1 == direction.y && !canGoUp) {
                 continue
             }
 
@@ -356,6 +364,11 @@ class MyStrategy {
                 else -> -1
             }
 
+            val bstJmpStep = when {
+                currentNode.boostJumpTile >= 0 && direction.y == currentNode.y + 1 -> currentNode.boostJumpTile + 1
+                else -> -1
+            }
+
             if (direction.x >= 0 &&
                 direction.x < level.size &&
                 direction.y >= 0 &&
@@ -366,7 +379,7 @@ class MyStrategy {
                 level[direction.x][direction.y].mark < 10 &&
                 nodes.none {
                     it.x == direction.x && it.y == direction.y &&
-                            (it.gen == currentNode.gen + 1 || it.jumpTile == jmpStep/* && it.boostJumpTile == currentNode.boostJumpTile*/)
+                            (it.gen == currentNode.gen + 1 || (it.jumpTile == jmpStep && it.boostJumpTile == bstJmpStep))
                 }
             ) {
 
@@ -376,8 +389,7 @@ class MyStrategy {
                     direction.x,
                     direction.y,
                     jmpStep,
-                    /*if (currentNode.boostJumpTile >= 0 && direction.y == currentNode.y + 1) currentNode.boostJumpTile + 1 else */
-                    currentNode.boostJumpTile,
+                    bstJmpStep,
                     currentNode.gen + 1,
                     currentNode
                 )
@@ -400,7 +412,7 @@ class MyStrategy {
         return null
     }
 
-    private fun canGoUpTile(currentNode: Node, level: ArrayList<ArrayList<TileMarked>>, newX: Int): Boolean {
+    private fun canGoUpTile(currentNode: Node, level: ArrayList<ArrayList<TileMarked>>): Boolean {
         // Check current going down
         if (currentNode.y < currentNode.parentNode?.y ?: 0 &&
             level[currentNode.x][currentNode.y].type != Tile.LADDER &&
@@ -431,6 +443,8 @@ class MyStrategy {
     }
 
     private fun canGoDown(currentNode: Node, level: ArrayList<ArrayList<TileMarked>>, newX: Int): Boolean {
+        if (currentNode.boostJumpTile != -1)
+            return false
         if (currentNode.y <= 0 ||
             level[currentNode.x][currentNode.y - 1].type == Tile.WALL ||
             (abs((nearestEnemy?.position?.y ?: 0.0) + (nearestEnemy?.size?.y ?: 0.0) - currentNode.y) <= jumpPerTick &&
@@ -442,6 +456,8 @@ class MyStrategy {
     }
 
     private fun canGoHorizontalTile(currentNode: Node, level: ArrayList<ArrayList<TileMarked>>, newX: Int): Boolean {
+        if (currentNode.boostJumpTile != -1)
+            return false
         return currentNode.y == 0 ||
                 (newX < level.size &&
                         level[currentNode.x][currentNode.y - 1].type != Tile.EMPTY &&
