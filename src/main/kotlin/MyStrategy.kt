@@ -3,6 +3,7 @@ import model.Unit
 import java.util.concurrent.LinkedBlockingQueue
 import kotlin.collections.ArrayList
 import kotlin.math.abs
+import kotlin.math.atan2
 import kotlin.math.sign
 
 class MyStrategy {
@@ -30,6 +31,9 @@ class MyStrategy {
     private var nextPoint: Node? = null
     private var nearestEnemy: model.Unit? = null
     private var attempts = 0
+    private var goToDefault = false
+    private lateinit var default: Vec2Double
+    private lateinit var unitPrevPosition: Vec2Double
 
 
     fun getAction(unit: model.Unit, game: Game, debug: Debug): UnitAction {
@@ -45,6 +49,8 @@ class MyStrategy {
             ticksPerSec = game.properties.ticksPerSecond
             unitHeight = game.units[0].size.y
             unitWidth = game.units[0].size.x
+            default = unit.position
+            unitPrevPosition = unit.position
         }
 
         val level = ArrayList<ArrayList<TileMarked>>()
@@ -81,7 +87,7 @@ class MyStrategy {
             route.clear()
             route.addAll(
                 when {
-                    unit.health <= game.properties.unitMaxHealth * 2.0 / 3.0 &&
+                    (goToDefault || unit.health <= game.properties.unitMaxHealth * 2.0 / 3.0) &&
                             game.lootBoxes.any { it.item is Item.HealthPack } -> {
 
                         val localRoute = ArrayList<Node>()
@@ -90,7 +96,8 @@ class MyStrategy {
                             game.lootBoxes.filter { it.item is Item.HealthPack }.map { lootBox ->
                                 SquareObject(
                                     lootBox.position,
-                                    lootBox.size
+                                    lootBox.size,
+                                    false
                                 )
                             },
                             level,
@@ -111,9 +118,25 @@ class MyStrategy {
                             game.lootBoxes.filter { it.item is Item.Weapon }.map { lootBox ->
                                 SquareObject(
                                     lootBox.position,
-                                    lootBox.size
+                                    lootBox.size,
+                                    false
                                 )
                             },
+                            level,
+                            debug,
+                            localRoute,
+                            nextPoint
+                        )
+                        if (localRoute.isNotEmpty()) {
+                            localRoute.reverse()
+                        }
+                        localRoute
+                    }
+                    goToDefault -> {
+                        val localRoute = ArrayList<Node>()
+                        buildPath(
+                            unit,
+                            listOf(SquareObject(default, unit.size, false)),
                             level,
                             debug,
                             localRoute,
@@ -128,7 +151,8 @@ class MyStrategy {
                         val localRoute = ArrayList<Node>()
                         val enSquare = SquareObject(
                             pos = nearestEnemy?.position ?: Vec2Double(0.0, 0.0),
-                            size = nearestEnemy?.size ?: Vec2Double(0.0, 0.0)
+                            size = nearestEnemy?.size ?: Vec2Double(0.0, 0.0),
+                            isEnemy = true
                         )
                         buildPath(
                             unit,
@@ -185,6 +209,9 @@ class MyStrategy {
             Vec2Double(route[0].x + 0.5, route[0].y.toDouble())
         }
 
+        if (abs(targetPos.y - unitPrevPosition.y) < abs(targetPos.y - unit.position.y)){
+            route.clear()
+        }
 
         var aim = Vec2Double(0.0, 0.0)
         nearestEnemy?.let {
@@ -208,8 +235,14 @@ class MyStrategy {
             action.shoot = false
         } else {
             action.shoot = shootAllowed(unit, nearestEnemy, game, debug)
-            if (action.shoot)
+            if (action.shoot) {
                 enemyIndex++
+            } else {
+                if (distanceSqr(unit.position, nearestEnemy?.position ?: Vec2Double()) < 4) {
+                    goToDefault = true
+                    route.clear()
+                }
+            }
 // add intelli
 //            if (!action.shoot && unit.weapon?.params?.magazineSize != unit.weapon?.magazine) {
 //                action.reload = true
@@ -255,12 +288,16 @@ class MyStrategy {
     ) {
         val nodes = LinkedBlockingQueue<Node>()
 
-        val firstNode = knownNode ?: Node(
+        val firstNode = if (knownNode == null ||
+            abs(knownNode.x - unit.position.x.toInt()) > unit.size.x * 2 ||
+            abs(knownNode.y - unit.position.y.toInt()) > unit.size.y * 2
+        ) Node(
             unit.position.x.toInt(),
             unit.position.y.toInt(),
-            jumpTile = knownNode?.jumpTile ?: -1,
-            boostJumpTile = knownNode?.boostJumpTile ?: -1
-        )
+            jumpTile = -1,
+            boostJumpTile = -1
+        ) else
+            knownNode
 
         for (target in targets) {
             if (objectsCollisionDetected(
@@ -412,8 +449,9 @@ class MyStrategy {
                         return node
 
                     if (target.pos.x == nearestEnemy?.position?.x &&
-                        target.pos.y == nearestEnemy?.position?.y && abs(node.x + unitSize.x / 2 - target.pos.x) < (unitSize.x + target.size.x) &&
-                        abs(node.y + unitSize.y / 2 - target.pos.y) < (target.size.y + unitSize.y)
+                        target.pos.y == nearestEnemy?.position?.y &&
+                        abs(node.x + (if (target.isEnemy) unitSize.x / 2 else 0.0) - target.pos.x) < (unitSize.x + (if (target.isEnemy) target.size.x else 0.0)) &&
+                        abs(node.y + (if (target.isEnemy) unitSize.y / 2 else 0.0) - target.pos.y) < (target.size.y + (if (target.isEnemy) unitSize.y else 0.0))
                     )
                         return node
                 }
@@ -507,10 +545,12 @@ class MyStrategy {
     private fun nearestEnemyIsNotBreak(direction: Vec2Int, currentNode: Node): Boolean {
         nearestEnemy?.let { enemy ->
             return if (direction.x > currentNode.x) {
+                enemy.position.x < currentNode.x ||
                 direction.x < enemy.position.x - enemy.size.x * 2 ||
                         (direction.y > (enemy.position.y + enemy.size.y) ||
                                 direction.y + unitHeight < enemy.position.y)
             } else {
+                enemy.position.x > currentNode.x ||
                 direction.x > enemy.position.x + enemy.size.x * 2 ||
                         (direction.y > (enemy.position.y + enemy.size.y) ||
                                 direction.y + unitHeight < enemy.position.y)
@@ -779,8 +819,8 @@ class MyStrategy {
                 if (game.level.tiles[i][j].discriminant == Tile.WALL.discriminant) {
                     if (xl.toInt() == xr.toInt() || yt.toInt() == yb.toInt() ||
                         directrixTileCollision(
-                            i,
-                            j,
+                            i.toDouble(),
+                            j.toDouble(),
                             unitCenter,
                             enemyCenter,
                             unit.weapon!!.spread,
@@ -806,13 +846,34 @@ class MyStrategy {
             val r = game.properties.weaponParams[WeaponType.ROCKET_LAUNCHER]?.explosion?.radius ?: 0.0
             val dam = game.properties.weaponParams[WeaponType.ROCKET_LAUNCHER]?.explosion?.damage ?: 0
             var left =
-                if (enemyCenter.x < unitCenter.x) (unit.position.x - (unit.size.x / 2) - r).toInt() else unitCenter.x.toInt()
+                if (enemyCenter.x < unitCenter.x)
+                    (enemyCenter.x - (unit.size.x / 2) - r).toInt()
+                else
+                    (unitCenter.x - (unit.size.x / 2) - r).toInt()
+            if (left < 0) left = 0
+
             var right =
-                if (enemyCenter.x >= unitCenter.x) (unit.position.x + (unit.size.x / 2) + r).toInt() else unitCenter.x.toInt()
+                if (enemyCenter.x >= unitCenter.x)
+                    (enemyCenter.x + (unit.size.x / 2) + r).toInt()
+                else
+                    (unitCenter.x + (unit.size.x / 2) + r).toInt()
+            if (right >= game.level.tiles.size)
+                right = game.level.tiles.size - 1
+
             var top =
-                if (enemyCenter.y >= unitCenter.y) (unit.position.y + (unit.size.y) + r).toInt() else unit.position.y.toInt()
+                if (enemyCenter.y >= unitCenter.y)
+                    (nearestEnemy.position.y + (unit.size.y) + r).toInt()
+                else
+                    (unit.position.y + (unit.size.y) + r).toInt()
+            if (top >= game.level.tiles[0].size)
+                top = game.level.tiles[0].size - 1
             var bottom =
-                if (enemyCenter.y < unitCenter.y) (unit.position.y - r).toInt() else unit.position.y.toInt()
+                if (enemyCenter.y < unitCenter.y)
+                    (nearestEnemy.position.y - r).toInt()
+                else
+                    (unit.position.y - r).toInt()
+            if (bottom < 0)
+                bottom = 0
 
             if (left > 0)
                 left--
@@ -827,16 +888,22 @@ class MyStrategy {
                 for (j in bottom..top) {
                     if ((i < 0 || j < 0 || i >= game.level.tiles.size || j >= game.level.tiles[0].size || game.level.tiles[i][j].discriminant == Tile.WALL.discriminant)
                         && directrixTileCollision(
-                            i,
-                            j,
+                            i.toDouble(),
+                            j.toDouble(),
                             unitCenter,
                             enemyCenter,
                             unit.weapon!!.spread,
                             game.properties.weaponParams[WeaponType.ROCKET_LAUNCHER]?.bullet?.size
                                 ?: 0.0
                         )
-                        && (dam > unit.health) && (dam < nearestEnemy.health || nearestEnemy.health > unit.health)
                     ) {
+
+                        if (distanceSqr(unitCenter, Vec2Double(i.toDouble(), j.toDouble())) > (r + 2) || (
+                                    distanceSqr(enemyCenter, Vec2Double(i.toDouble(), j.toDouble())) <= r &&
+                                            dam > nearestEnemy.health && nearestEnemy.health < unit.health)
+
+                        )
+                            continue
                         debug.draw(
                             CustomData.Rect(
                                 Vec2Float(i.toFloat(), j.toFloat()),
@@ -853,8 +920,8 @@ class MyStrategy {
     }
 
     private fun directrixTileCollision(
-        tileXIndex: Int,
-        tileYIndex: Int,
+        tileXIndex: Double,
+        tileYIndex: Double,
         unitCenter: Vec2Double,
         aimCenter: Vec2Double,
         deltaAngle: Double,
@@ -862,35 +929,35 @@ class MyStrategy {
     ): Boolean {
 
         val bulletSqr = bulletSize * bulletSize
-        if (distanceSqr(Vec2Double(tileXIndex.toDouble(), tileYIndex.toDouble()), unitCenter) <= bulletSqr ||
-            distanceSqr(Vec2Double((tileXIndex + 1).toDouble(), tileYIndex.toDouble()), unitCenter) <= bulletSqr ||
-            distanceSqr(Vec2Double((tileXIndex).toDouble(), (tileYIndex + 1).toDouble()), unitCenter) <= bulletSqr ||
-            distanceSqr(Vec2Double((tileXIndex + 1).toDouble(), (tileYIndex + 1).toDouble()), unitCenter) <= bulletSqr
+        if (distanceSqr(Vec2Double(tileXIndex, tileYIndex), unitCenter) <= bulletSqr ||
+            distanceSqr(Vec2Double(tileXIndex + 1, tileYIndex), unitCenter) <= bulletSqr ||
+            distanceSqr(Vec2Double(tileXIndex, tileYIndex + 1), unitCenter) <= bulletSqr ||
+            distanceSqr(Vec2Double(tileXIndex + 1, tileYIndex + 1), unitCenter) <= bulletSqr
         ) {
             return true
         }
 
-        val actualAlpha = kotlin.math.atan2(aimCenter.y - unitCenter.y, aimCenter.x - unitCenter.x)
+        val actualAlpha = atan2(aimCenter.y - unitCenter.y, aimCenter.x - unitCenter.x)
 
         val corner1 = Vec2Double(tileXIndex - bulletSize / 2, tileYIndex - bulletSize / 2)
-        val alpha1 = kotlin.math.atan2(corner1.y - unitCenter.y, corner1.x - unitCenter.x)
+        val alpha1 = atan2(corner1.y - unitCenter.y, corner1.x - unitCenter.x)
         if (alpha1 <= actualAlpha + deltaAngle && alpha1 >= actualAlpha - deltaAngle)
             return true
 
         val corner2 = Vec2Double(tileXIndex - bulletSize / 2, tileYIndex + 1 + bulletSize / 2)
-        val alpha2 = kotlin.math.atan2(corner2.y - unitCenter.y, corner2.x - unitCenter.x)
+        val alpha2 = atan2(corner2.y - unitCenter.y, corner2.x - unitCenter.x)
         if (alpha2 <= actualAlpha + deltaAngle && alpha2 >= actualAlpha - deltaAngle)
             return true
 
         val corner3 = Vec2Double(tileXIndex + 1 + bulletSize / 2, tileYIndex - bulletSize / 2)
         val alpha3 =
-            kotlin.math.atan2(corner3.y - unitCenter.y, corner3.x - unitCenter.x)
+            atan2(corner3.y - unitCenter.y, corner3.x - unitCenter.x)
         if (alpha3 <= actualAlpha + deltaAngle && alpha3 >= actualAlpha - deltaAngle)
             return true
 
         val corner4 = Vec2Double(tileXIndex + 1 + bulletSize / 2, tileYIndex + 1 + bulletSize / 2)
         val alpha4 =
-            Math.atan2(corner4.y - unitCenter.y, corner4.x - unitCenter.x)
+            atan2(corner4.y - unitCenter.y, corner4.x - unitCenter.x)
         if (alpha4 <= actualAlpha + deltaAngle && alpha4 >= actualAlpha - deltaAngle)
             return true
         val s1 = sign(actualAlpha - alpha1)
@@ -932,9 +999,9 @@ data class Node(
     }
 }
 
-data class SquareObject(val pos: Vec2Double, val size: Vec2Double) {
+data class SquareObject(val pos: Vec2Double, val size: Vec2Double, val isEnemy: Boolean) {
     override fun toString(): String {
-        return "pos: ${pos.x}:${pos.y} , size: ${size.x}:${size.y}"
+        return "pos: ${pos.x}:${pos.y} , size: ${size.x}:${size.y}, isEnemy $isEnemy"
     }
 }
 
