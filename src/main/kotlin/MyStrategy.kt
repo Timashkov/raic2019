@@ -22,7 +22,6 @@ class MyStrategy {
     private var maxJumpTiles = 0.0
     private var maxBoostJumpTiles = 0.0
     private var ticksPerSec = 0.0
-    //private lateinit var unitMovement: UnitMovement
     private var unitHeight = 0.0
     private var unitWidth = 0.0
     private var enemyIndex = 0
@@ -199,8 +198,6 @@ class MyStrategy {
         val targetPos = if (route.isEmpty()) {
             nearestEnemy?.position ?: Vec2Double(0.5, 0.5)
         } else {
-//            if (unit.weapon != null)
-//                enemyIndex++
             if (route[0] == prevPoint || prevPoint == null) {
                 attempts++
             } else {
@@ -366,7 +363,6 @@ class MyStrategy {
             currentNode.jumpTile = -1
         }
 
-//        for (i in if (dx > 0) 0..1 else 2 downTo 1) {
         for (i in 0..7) {
             val direction = Vec2Int(currentNode.x, currentNode.y)
             when (i) {
@@ -471,12 +467,6 @@ class MyStrategy {
             return false
         }
 
-//        if ((nearestEnemy?.position?.y ?: 31.0) - unitHeight <= currentNode.y &&
-//            (nearestEnemy?.position?.y ?: 31.0) + (nearestEnemy?.size?.y ?: 0.0) > currentNode.y &&
-//            abs(nearestEnemy?.position?.x ?: -1.0 - currentNode.x) <= 1
-//        )
-//            return false
-
         if (abs(nearestEnemy?.position?.x ?: -1.0 - currentNode.x) < unitWidth) {
             val enemyPositionYDiff =
                 (nearestEnemy?.position?.y ?: 31.0) + (nearestEnemy?.size?.y ?: 0.0) - (currentNode.y + unitHeight)
@@ -533,12 +523,16 @@ class MyStrategy {
 
     private fun getVelocity(xCurrent: Double, xTarget: Double): Double {
         val dx = (xTarget - xCurrent)
-        return if (abs(dx) > maxDXPerTick) {
-            dx * ticksPerSec
-        } else if (abs(dx) < 0.001) {
-            0.0001 // fix for infinite moving
-        } else {
-            dx * ticksPerSec
+        return when {
+            abs(dx) > maxDXPerTick -> {
+                dx * ticksPerSec
+            }
+            abs(dx) < 0.001 -> {
+                0.0001 // fix for infinite moving
+            }
+            else -> {
+                dx * ticksPerSec
+            }
         }
     }
 
