@@ -206,7 +206,7 @@ class MyStrategy {
             Vec2Double(route[0].x + 0.5, route[0].y.toDouble())
         }
 
-        if (abs(targetPos.y - unitPrevPosition.y) < abs(targetPos.y - unit.position.y)){
+        if (abs(targetPos.y - unitPrevPosition.y) < abs(targetPos.y - unit.position.y)) {
             route.clear()
         }
 
@@ -350,13 +350,7 @@ class MyStrategy {
         ) {
             currentNode.boostJumpTile = 0
         }
-        if (currentNode.jumpTile != 0 && (currentNode.y == 0 ||
-                    level[currentNode.x][currentNode.y - 1].type != Tile.EMPTY ||
-                    (abs((nearestEnemy?.position?.y ?: 0.0) + unitHeight - currentNode.y) <= jumpPerTick &&
-                            abs(nearestEnemy?.position?.x ?: -1.0 - currentNode.x) <= 1))
-        ) {
-            currentNode.jumpTile = 0
-        }
+
         val canGoUp = canGoUpTile(currentNode, level)
         if (!canGoUp) {
             currentNode.boostJumpTile = -1
@@ -458,7 +452,7 @@ class MyStrategy {
     }
 
     private fun canGoUpTile(currentNode: Node, level: ArrayList<ArrayList<TileMarked>>): Boolean {
-
+        //up restriction
         if (currentNode.y >= (level[0].size - unitHeight).toInt() ||
             level[currentNode.x][currentNode.y + 2].type == Tile.WALL ||
             level[currentNode.parentNode?.x ?: currentNode.x][currentNode.y + 2].type == Tile.WALL
@@ -471,23 +465,22 @@ class MyStrategy {
             val enemyPositionYDiff =
                 (nearestEnemy?.position?.y ?: 31.0) + (nearestEnemy?.size?.y ?: 0.0) - (currentNode.y + unitHeight)
             if (enemyPositionYDiff > jumpPerTick && enemyPositionYDiff < 1)
-            //вражина
+            //вражина мешает
                 return false
         }
+        // end up restriction
 
-        if (level[currentNode.x][currentNode.y].type == Tile.LADDER) {
-            // на лестнице
-            return true
-        }
-
-        // Check current going down
-        if (currentNode.y < currentNode.parentNode?.y ?: 0 &&
-            level[currentNode.x][currentNode.y].type != Tile.LADDER &&
-            currentNode.y > 0 &&
-            level[currentNode.x][currentNode.y - 1].type == Tile.EMPTY
+        if (level[currentNode.x][currentNode.y].type == Tile.LADDER ||
+            currentNode.y <= 0 ||
+            level[currentNode.x][currentNode.y - 1].type == Tile.EMPTY || (
+                    (abs((nearestEnemy?.position?.y ?: 0.0) + unitHeight - currentNode.y) <= jumpPerTick &&
+                            abs(nearestEnemy?.position?.x ?: -1.0 - currentNode.x) <= 1)
+                    )
         ) {
-            //не на лестнице падаем
-            return false
+            // когда не пусто под ногами - можно прыгать
+            if (currentNode.jumpTile != 0)
+                currentNode.jumpTile = 0
+            return true
         }
 
         if ((currentNode.jumpTile == -1 &&
@@ -540,12 +533,12 @@ class MyStrategy {
         nearestEnemy?.let { enemy ->
             return if (direction.x > currentNode.x) {
                 enemy.position.x < currentNode.x ||
-                direction.x < enemy.position.x - enemy.size.x * 2 ||
+                        direction.x < enemy.position.x - enemy.size.x * 2 ||
                         (direction.y > (enemy.position.y + enemy.size.y) ||
                                 direction.y + unitHeight < enemy.position.y)
             } else {
                 enemy.position.x > currentNode.x ||
-                direction.x > enemy.position.x + enemy.size.x * 2 ||
+                        direction.x > enemy.position.x + enemy.size.x * 2 ||
                         (direction.y > (enemy.position.y + enemy.size.y) ||
                                 direction.y + unitHeight < enemy.position.y)
             }
