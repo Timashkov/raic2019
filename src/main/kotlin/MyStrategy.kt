@@ -29,7 +29,6 @@ class MyStrategy {
     private var prevPoint: Node? = null
     private var nextPoint: Node? = null
     private var nearestEnemy: model.Unit? = null
-    private var attempts = 0
     private var goToDefault = false
     private lateinit var default: Vec2Double
     private lateinit var unitPrevPosition: Vec2Double
@@ -80,10 +79,7 @@ class MyStrategy {
         }
 
 
-        if (route.isEmpty() || enemyIndex >= 5 || attempts > 5) {
-            enemyIndex = 0
-            attempts = 0
-            route.clear()
+        if (route.isEmpty()) {
             nextPoint = Node(
                 position = Vec2Int(unit.position.x.toInt(), unit.position.y.toInt()),
                 jumpTile = if (unit.jumpState.canJump && unit.jumpState.maxTime < game.properties.unitJumpTime) getJumpTile(
@@ -170,7 +166,7 @@ class MyStrategy {
                             level,
                             debug,
                             localRoute,
-                            nextPoint
+                            nextPoint?.apply { goingToEnemy = true }
                         )
                         localRoute.reverse()
                         localRoute
@@ -188,6 +184,11 @@ class MyStrategy {
             prevPoint = route[0]
             if (route.size >= 2)
                 nextPoint = route[1]
+            if (route.size >= 3 && route[2].position.x == route[0].position.x) {
+                route[1].position.x = route[0].position.x
+                nextPoint?.position?.x = route[0].position.x
+            }
+
             route.removeAt(0)
         }
 
@@ -199,8 +200,8 @@ class MyStrategy {
             Vec2Double(route[0].position.x + 0.5, route[0].position.y.toDouble())
         }
 
-        if (abs(targetPos.y - unitPrevPosition.y + 0.5) < abs(targetPos.y - unit.position.y + 0.5) &&
-            abs(targetPos.y + 0.5 - unit.position.y) > 1
+        if (distanceSqr(targetPos, unitPrevPosition) < distanceSqr(targetPos, unit.position) &&
+            distanceSqr(targetPos, unit.position) > 5
         ) {
             route.clear()
         }
@@ -218,7 +219,8 @@ class MyStrategy {
 
         action.velocity = getVelocity(unit.position.x, targetPos.x)
         action.jump = targetPos.y > prevPoint?.position?.y?.toDouble() ?: 0.0 || targetPos.y > unit.position.y
-        action.jumpDown = targetPos.y < prevPoint?.position?.y?.toDouble() ?: 31.0 && targetPos.y < unit.position.y
+        action.jumpDown =
+            targetPos.y < prevPoint?.position?.y?.toDouble() ?: 31.0 && targetPos.y < unit.position.y - jumpPerTick
 
         action.aim = aim
 //        action.reload = false
@@ -230,8 +232,30 @@ class MyStrategy {
             action.shoot = shootAllowed(unit, nearestEnemy, game, debug) && isShootEffective(unit, nearestEnemy!!)
             if (action.shoot) {
                 enemyIndex++
+                if (enemyIndex >= 5) {
+                    enemyIndex = 0
+                    if (route.isNotEmpty() &&
+                        route[route.size - 1].goingToEnemy &&
+                        route[route.size - 1].position.x != nearestEnemy!!.position.x.toInt() &&
+                        route[route.size - 1].position.y != nearestEnemy!!.position.y.toInt()
+                    )
+                        route.clear()
+                }
+                if (unit.weapon?.magazine == 0 && distanceSqr(
+                        unit.position,
+                        nearestEnemy?.position ?: Vec2Double()
+                    ) < 5
+                ) {
+                    goToDefault = true
+                    route.clear()
+                }
+
+                if (goToDefault) {
+                    goToDefault = false
+                    route.clear()
+                }
             } else {
-                if (distanceSqr(unit.position, nearestEnemy?.position ?: Vec2Double()) < 4) {
+                if (distanceSqr(unit.position, nearestEnemy?.position ?: Vec2Double()) < 5) {
                     goToDefault = true
                     route.clear()
                 }
@@ -297,7 +321,8 @@ class MyStrategy {
         ) Node(
             Vec2Int(unit.position.x.toInt(), unit.position.y.toInt()),
             jumpTile = -1,
-            boostJumpTile = -1
+            boostJumpTile = -1,
+            goingToEnemy = targets[0].isEnemy
         ) else
             knownNode
 
@@ -362,6 +387,16 @@ class MyStrategy {
             currentNode.jumpTile = -1
         }
 
+        var deprecatedX = 0
+        var deprecatedY = 0
+        if (abs(nearestEnemy?.position?.x ?: 0.0 - currentNode.position.x) <= 2 &&
+            abs(nearestEnemy?.position?.y ?: 0.0 - currentNode.position.y) <= 4
+        ) {
+            deprecatedX = nearestEnemy?.position?.x?.toInt() ?: 0
+            deprecatedY = nearestEnemy?.position?.y?.toInt() ?: 0
+        }
+
+
         for (i in 0..7) {
             val direction = Vec2Int(currentNode.position.x, currentNode.position.y)
             when (i) {
@@ -386,6 +421,8 @@ class MyStrategy {
                 6 -> direction.apply { y += if (dy > 0) 1 else -1 }
                 else -> direction.apply { y -= if (dy > 0) 1 else -1 }
             }
+            if (direction.x == deprecatedX)
+                continue
 
             if (currentNode.parentNode?.position?.y == direction.y && currentNode.parentNode.position.x == direction.x)
                 continue
@@ -433,20 +470,23 @@ class MyStrategy {
                     jmpStep,
                     bstJmpStep,
                     currentNode.gen + 1,
+                    currentNode.goingToEnemy,
                     currentNode
                 )
                 nodes.add(node)
                 for (target in targets) {
-                    if (abs(node.position.x + unitSize.x / 2 - target.pos.x) < (unitSize.x / 2 + target.size.x / 2) &&
-                        abs(node.position.y + unitSize.y / 2 - target.pos.y) < (target.size.y / 2 + unitSize.y / 2)
+                    if (abs(node.position.x + unitSize.x / 2 - target.pos.x) < (target.size.x / 2) &&
+                        abs(node.position.y - target.pos.y) < (target.size.y)
                     )
                         return node
 
-                    if (target.pos.x == nearestEnemy?.position?.x &&
-                        target.pos.y == nearestEnemy?.position?.y &&
-                        abs(node.position.x + (if (target.isEnemy) unitSize.x / 2 else 0.0) - target.pos.x) < (unitSize.x + (if (target.isEnemy) target.size.x else 0.0)) &&
-                        abs(node.position.y + (if (target.isEnemy) unitSize.y / 2 else 0.0) - target.pos.y) < (target.size.y + (if (target.isEnemy) unitSize.y else 0.0))
-                    )
+                    if (distanceSqr(target.pos, Vec2Double(node.position.x.toDouble(), node.position.y.toDouble())) < 5)
+//
+//                        target.pos.x == nearestEnemy?.position?.x &&
+//                        target.pos.y == nearestEnemy?.position?.y &&
+//                        abs(node.position.x + (if (target.isEnemy) unitSize.x / 2 else 0.0) - target.pos.x) < (unitSize.x + (if (target.isEnemy) target.size.x else 0.0)) &&
+//                        abs(node.position.y + (if (target.isEnemy) unitSize.y / 2 else 0.0) - target.pos.y) < (target.size.y + (if (target.isEnemy) unitSize.y else 0.0))
+//                    )
                         return node
                 }
             }
@@ -840,7 +880,7 @@ class MyStrategy {
             xr = unitCenter.x
         }
 
-        var yt = enemyCenter.y
+        var yt = enemyCenter.y - if (unit.weapon?.typ == WeaponType.ROCKET_LAUNCHER) unit.size.y / 2 else 0.0
         var yb = unitCenter.y
         if (unitCenter.y > enemyCenter.y) {
             yb = enemyCenter.y
@@ -1045,13 +1085,15 @@ data class Node(
     var jumpTile: Int = -1,
     var boostJumpTile: Int = -1,
     val gen: Int = 0,
+    var goingToEnemy: Boolean = false,
     val parentNode: Node? = null
 ) {
     fun parentLessClone(): Node {
         return Node(
             Vec2Int(this.position.x, this.position.y),
             jumpTile = this.jumpTile,
-            boostJumpTile = this.boostJumpTile
+            boostJumpTile = this.boostJumpTile,
+            goingToEnemy = this.goingToEnemy
         )
     }
 }
