@@ -189,15 +189,15 @@ class MyStrategy {
 
         if (enemyIndex >= 5) {
             enemyIndex = 0
-
+            val enSquare = SquareObject(
+                pos = nearestEnemy?.position ?: Vec2Double(0.0, 0.0),
+                size = nearestEnemy?.size ?: Vec2Double(0.0, 0.0),
+                isEnemy = true
+            )
             if ((!goToDefault && unit.health == game.properties.unitMaxHealth) || route.isEmpty()) {
                 route.clear()
                 val localRoute = ArrayList<Node>()
-                val enSquare = SquareObject(
-                    pos = nearestEnemy?.position ?: Vec2Double(0.0, 0.0),
-                    size = nearestEnemy?.size ?: Vec2Double(0.0, 0.0),
-                    isEnemy = true
-                )
+
                 buildPath(
                     unit,
                     arrayListOf(enSquare),
@@ -295,7 +295,16 @@ class MyStrategy {
 //                action.reload = true
 //            }
         }
-        action.swapWeapon = false
+        if (unit.weapon?.typ != WeaponType.PISTOL) {
+            for (item in game.lootBoxes) {
+
+                if (item.item is Item.Weapon &&
+                    (item.item as Item.Weapon).weaponType == WeaponType.PISTOL &&
+                    unitTargetCollisionDetected(unit.position, unit.size, item.position, item.size)
+                )
+                    action.swapWeapon = true
+            }
+        }
         action.plantMine = false
 
 //        if (!::unitMovement.isInitialized)
