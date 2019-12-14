@@ -71,13 +71,12 @@ class MyStrategy {
             }
         }
 
-        if (unit.health <= game.properties.unitMaxHealth * 3.0 / 4.0 && route.isNotEmpty()) {
+        if (unit.health < game.properties.unitMaxHealth && route.isNotEmpty()) {
             val pos = Vec2Int(route[route.size - 1].position.x, route[route.size - 1].position.y)
             if (game.lootBoxes.none { it.item is Item.HealthPack && it.position.x.toInt() == pos.x && it.position.y.toInt() == pos.y } &&
                 game.lootBoxes.any { it.item is Item.HealthPack })
                 route.clear()
         }
-
 
         if (route.isEmpty()) {
             nextPoint = Node(
@@ -93,31 +92,57 @@ class MyStrategy {
             )
             route.addAll(
                 when {
-                    (goToDefault || unit.health <= game.properties.unitMaxHealth * 2.0 / 3.0) &&
+                    (goToDefault || unit.health < game.properties.unitMaxHealth) &&
                             game.lootBoxes.any { it.item is Item.HealthPack } -> {
+
+                        val targets1 = game.lootBoxes.filter {
+                            it.item is Item.HealthPack &&
+                                    abs(
+                                        it.position.x - (nearestEnemy?.position?.x ?: 0.0)
+                                    ) > abs(it.position.x - unit.position.x)
+                        }.map { lootBox ->
+                            SquareObject(
+                                lootBox.position,
+                                lootBox.size,
+                                false
+                            )
+                        }
+
+                        val targets2 = game.lootBoxes.filter {
+                            it.item is Item.HealthPack
+                        }.map { lootBox ->
+                            SquareObject(
+                                lootBox.position,
+                                lootBox.size,
+                                false
+                            )
+                        }
 
                         val localRoute = ArrayList<Node>()
                         buildPath(
                             unit,
-                            game.lootBoxes.filter { it.item is Item.HealthPack }.map { lootBox ->
-                                SquareObject(
-                                    lootBox.position,
-                                    lootBox.size,
-                                    false
-                                )
-                            },
+                            targets1,
                             level,
                             debug,
                             localRoute,
                             nextPoint
                         )
+                        if (localRoute.isEmpty()) {
+                            buildPath(
+                                unit,
+                                targets2,
+                                level,
+                                debug,
+                                localRoute,
+                                nextPoint
+                            )
+                        }
                         if (localRoute.isNotEmpty()) {
                             localRoute.reverse()
                         }
                         localRoute
                     }
                     unit.weapon == null && game.lootBoxes.any { it.item is Item.Weapon } -> {
-
                         val localRoute = ArrayList<Node>()
                         buildPath(
                             unit,
@@ -154,25 +179,36 @@ class MyStrategy {
                         localRoute
                     }
                     else -> {
-                        val localRoute = ArrayList<Node>()
-                        val enSquare = SquareObject(
-                            pos = nearestEnemy?.position ?: Vec2Double(0.0, 0.0),
-                            size = nearestEnemy?.size ?: Vec2Double(0.0, 0.0),
-                            isEnemy = true
-                        )
-                        buildPath(
-                            unit,
-                            arrayListOf(enSquare),
-                            level,
-                            debug,
-                            localRoute,
-                            nextPoint?.apply { goingToEnemy = true }
-                        )
-                        localRoute.reverse()
-                        localRoute
+                        enemyIndex = 5
+                        ArrayList()
                     }
                 }
             )
+        }
+
+
+        if (enemyIndex >= 5) {
+            enemyIndex = 0
+
+            if ((!goToDefault && unit.health == game.properties.unitMaxHealth) || route.isEmpty()) {
+                route.clear()
+                val localRoute = ArrayList<Node>()
+                val enSquare = SquareObject(
+                    pos = nearestEnemy?.position ?: Vec2Double(0.0, 0.0),
+                    size = nearestEnemy?.size ?: Vec2Double(0.0, 0.0),
+                    isEnemy = true
+                )
+                buildPath(
+                    unit,
+                    arrayListOf(enSquare),
+                    level,
+                    debug,
+                    localRoute,
+                    nextPoint?.apply { goingToEnemy = true }
+                )
+                localRoute.reverse()
+                route.addAll(localRoute)
+            }
         }
 
         if (route.isNotEmpty() &&
@@ -229,18 +265,11 @@ class MyStrategy {
         if (nearestEnemy == null || unit.weapon == null) {
             action.shoot = false
         } else {
-            action.shoot = shootAllowed(unit, nearestEnemy, game, debug) && isShootEffective(unit, nearestEnemy!!)
-            if (action.shoot) {
+            if (shootAllowed(unit, nearestEnemy, game, debug)) {
+                action.shoot = isShootEffective(unit, nearestEnemy!!)
+
                 enemyIndex++
-                if (enemyIndex >= 5) {
-                    enemyIndex = 0
-                    if (route.isNotEmpty() &&
-                        route[route.size - 1].goingToEnemy &&
-                        route[route.size - 1].position.x != nearestEnemy!!.position.x.toInt() &&
-                        route[route.size - 1].position.y != nearestEnemy!!.position.y.toInt()
-                    )
-                        route.clear()
-                }
+
                 if (unit.weapon?.magazine == 0 && distanceSqr(
                         unit.position,
                         nearestEnemy?.position ?: Vec2Double()
@@ -255,6 +284,7 @@ class MyStrategy {
                     route.clear()
                 }
             } else {
+                action.shoot = false
                 if (distanceSqr(unit.position, nearestEnemy?.position ?: Vec2Double()) < 5) {
                     goToDefault = true
                     route.clear()
@@ -313,6 +343,8 @@ class MyStrategy {
         route: ArrayList<Node>,
         knownNode: Node? = null
     ) {
+        if (targets.isNullOrEmpty())
+            return
         val nodes = LinkedBlockingQueue<Node>()
 
         val firstNode = if (knownNode == null ||
@@ -387,16 +419,6 @@ class MyStrategy {
             currentNode.jumpTile = -1
         }
 
-        var deprecatedX = 0
-        var deprecatedY = 0
-        if (abs(nearestEnemy?.position?.x ?: 0.0 - currentNode.position.x) <= 2 &&
-            abs(nearestEnemy?.position?.y ?: 0.0 - currentNode.position.y) <= 4
-        ) {
-            deprecatedX = nearestEnemy?.position?.x?.toInt() ?: 0
-            deprecatedY = nearestEnemy?.position?.y?.toInt() ?: 0
-        }
-
-
         for (i in 0..7) {
             val direction = Vec2Int(currentNode.position.x, currentNode.position.y)
             when (i) {
@@ -421,8 +443,6 @@ class MyStrategy {
                 6 -> direction.apply { y += if (dy > 0) 1 else -1 }
                 else -> direction.apply { y -= if (dy > 0) 1 else -1 }
             }
-            if (direction.x == deprecatedX)
-                continue
 
             if (currentNode.parentNode?.position?.y == direction.y && currentNode.parentNode.position.x == direction.x)
                 continue
@@ -480,7 +500,11 @@ class MyStrategy {
                     )
                         return node
 
-                    if (distanceSqr(target.pos, Vec2Double(node.position.x.toDouble(), node.position.y.toDouble())) < 5)
+                    if (target.isEnemy && distanceSqr(
+                            target.pos,
+                            Vec2Double(node.position.x.toDouble(), node.position.y.toDouble())
+                        ) < 5
+                    )
 //
 //                        target.pos.x == nearestEnemy?.position?.x &&
 //                        target.pos.y == nearestEnemy?.position?.y &&
@@ -850,10 +874,10 @@ class MyStrategy {
 
         var a1 = atan2(y1 - unitCenter.y, x1 - unitCenter.x)
         if (a1 < 0)
-            a1 += kotlin.math.PI
+            a1 += kotlin.math.PI * 2
         var a2 = atan2(y2 - unitCenter.y, x2 - unitCenter.x)
         if (a2 < 0)
-            a2 += kotlin.math.PI
+            a2 += kotlin.math.PI * 2
 
         val deltaAngle = abs(a1 - a2)
         if (deltaAngle < (unit.weapon?.spread ?: 0.0 * 3 / 4))
@@ -1017,19 +1041,19 @@ class MyStrategy {
 
         var actualAlpha = atan2(aimCenter.y - unitCenter.y, aimCenter.x - unitCenter.x)
         if (actualAlpha < 0)
-            actualAlpha += kotlin.math.PI
+            actualAlpha += kotlin.math.PI * 2
 
         val corner1 = Vec2Double(tileXIndex - bulletSize / 2, tileYIndex - bulletSize / 2)
         var alpha1 = atan2(corner1.y - unitCenter.y, corner1.x - unitCenter.x)
         if (alpha1 < 0)
-            alpha1 += kotlin.math.PI
+            alpha1 += kotlin.math.PI * 2
         if (alpha1 <= actualAlpha + deltaAngle && alpha1 >= actualAlpha - deltaAngle)
             return true
 
         val corner2 = Vec2Double(tileXIndex - bulletSize / 2, tileYIndex + 1 + bulletSize / 2)
         var alpha2 = atan2(corner2.y - unitCenter.y, corner2.x - unitCenter.x)
         if (alpha2 < 0)
-            alpha2 += kotlin.math.PI
+            alpha2 += kotlin.math.PI * 2
         if (alpha2 <= actualAlpha + deltaAngle && alpha2 >= actualAlpha - deltaAngle)
             return true
 
@@ -1037,7 +1061,7 @@ class MyStrategy {
         var alpha3 =
             atan2(corner3.y - unitCenter.y, corner3.x - unitCenter.x)
         if (alpha3 < 0)
-            alpha3 += kotlin.math.PI
+            alpha3 += kotlin.math.PI * 2
         if (alpha3 <= actualAlpha + deltaAngle && alpha3 >= actualAlpha - deltaAngle)
             return true
 
@@ -1045,7 +1069,7 @@ class MyStrategy {
         var alpha4 =
             atan2(corner4.y - unitCenter.y, corner4.x - unitCenter.x)
         if (alpha4 < 0)
-            alpha4 += kotlin.math.PI
+            alpha4 += kotlin.math.PI * 2
         if (alpha4 <= actualAlpha + deltaAngle && alpha4 >= actualAlpha - deltaAngle)
             return true
         val s1 = sign(actualAlpha - alpha1)
