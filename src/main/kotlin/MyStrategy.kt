@@ -71,7 +71,10 @@ class MyStrategy {
             }
         }
 
-        if (unit.health < game.properties.unitMaxHealth && route.isNotEmpty()) {
+        if ((unit.health < game.properties.unitMaxHealth && unit.health < (nearestEnemy?.health ?: unit.health) ||
+                    unit.health < game.properties.unitMaxHealth * 3 / 4)
+            && route.isNotEmpty()
+        ) {
             val pos = Vec2Int(route[route.size - 1].position.x, route[route.size - 1].position.y)
             if (game.lootBoxes.none { it.item is Item.HealthPack && it.position.x.toInt() == pos.x && it.position.y.toInt() == pos.y } &&
                 game.lootBoxes.any { it.item is Item.HealthPack })
@@ -92,7 +95,9 @@ class MyStrategy {
             )
             route.addAll(
                 when {
-                    (goToDefault || unit.health < game.properties.unitMaxHealth) &&
+                    (goToDefault || (unit.health < game.properties.unitMaxHealth && unit.health < (nearestEnemy?.health
+                        ?: unit.health) ||
+                            unit.health < game.properties.unitMaxHealth * 3 / 4)) &&
                             game.lootBoxes.any { it.item is Item.HealthPack } -> {
 
                         val targets1 = game.lootBoxes.filter {
@@ -266,7 +271,7 @@ class MyStrategy {
             action.shoot = false
         } else {
             if (shootAllowed(unit, nearestEnemy, game, debug)) {
-                action.shoot = isShootEffective(unit, nearestEnemy!!)
+                action.shoot = true// isShootEffective(unit, nearestEnemy!!)
 
                 enemyIndex++
 
@@ -881,15 +886,14 @@ class MyStrategy {
 
         val unitCenter = Vec2Double(unit.position.x, unit.position.y + unit.size.y / 2)
 
-        var a1 = atan2(y1 - unitCenter.y, x1 - unitCenter.x)
-        if (a1 < 0)
-            a1 += kotlin.math.PI * 2
-        var a2 = atan2(y2 - unitCenter.y, x2 - unitCenter.x)
-        if (a2 < 0)
-            a2 += kotlin.math.PI * 2
+        val a1 = atan2(y1 - unitCenter.y, x1 - unitCenter.x)
+        val a2 = atan2(y2 - unitCenter.y, x2 - unitCenter.x)
 
-        val deltaAngle = abs(a1 - a2)
-        if (deltaAngle < (unit.weapon?.spread ?: 0.0 * 3 / 4))
+        var deltaAngle = abs(a1 - a2)
+        while (deltaAngle > kotlin.math.PI * 2) {
+            deltaAngle -= kotlin.math.PI * 2
+        }
+        if (deltaAngle < (unit.weapon?.spread ?: 0.0 * 3 / 5))
             return false
         return true
     }
@@ -1048,38 +1052,42 @@ class MyStrategy {
             return true
         }
 
-        var actualAlpha = atan2(aimCenter.y - unitCenter.y, aimCenter.x - unitCenter.x)
-        if (actualAlpha < 0)
-            actualAlpha += kotlin.math.PI * 2
+        val actualAlpha = atan2(aimCenter.y - unitCenter.y, aimCenter.x - unitCenter.x)
 
         val corner1 = Vec2Double(tileXIndex - bulletSize / 2, tileYIndex - bulletSize / 2)
-        var alpha1 = atan2(corner1.y - unitCenter.y, corner1.x - unitCenter.x)
-        if (alpha1 < 0)
-            alpha1 += kotlin.math.PI * 2
-        if (alpha1 <= actualAlpha + deltaAngle && alpha1 >= actualAlpha - deltaAngle)
+        val alpha1 = atan2(corner1.y - unitCenter.y, corner1.x - unitCenter.x)
+        if (alpha1 <= actualAlpha + deltaAngle && alpha1 >= actualAlpha - deltaAngle ||
+            alpha1 <= actualAlpha + deltaAngle + 2 * kotlin.math.PI && alpha1 >= actualAlpha - deltaAngle + 2 * kotlin.math.PI ||
+            alpha1 <= actualAlpha + deltaAngle - 2 * kotlin.math.PI && alpha1 >= actualAlpha - deltaAngle - 2 * kotlin.math.PI
+        )
             return true
 
         val corner2 = Vec2Double(tileXIndex - bulletSize / 2, tileYIndex + 1 + bulletSize / 2)
-        var alpha2 = atan2(corner2.y - unitCenter.y, corner2.x - unitCenter.x)
-        if (alpha2 < 0)
-            alpha2 += kotlin.math.PI * 2
-        if (alpha2 <= actualAlpha + deltaAngle && alpha2 >= actualAlpha - deltaAngle)
+        val alpha2 = atan2(corner2.y - unitCenter.y, corner2.x - unitCenter.x)
+
+        if (alpha2 <= actualAlpha + deltaAngle && alpha2 >= actualAlpha - deltaAngle ||
+            alpha2 <= actualAlpha + deltaAngle + 2 * kotlin.math.PI && alpha2 >= actualAlpha - deltaAngle + 2 * kotlin.math.PI ||
+            alpha2 <= actualAlpha + deltaAngle - 2 * kotlin.math.PI && alpha2 >= actualAlpha - deltaAngle - 2 * kotlin.math.PI
+        )
             return true
 
         val corner3 = Vec2Double(tileXIndex + 1 + bulletSize / 2, tileYIndex - bulletSize / 2)
-        var alpha3 =
+        val alpha3 =
             atan2(corner3.y - unitCenter.y, corner3.x - unitCenter.x)
-        if (alpha3 < 0)
-            alpha3 += kotlin.math.PI * 2
-        if (alpha3 <= actualAlpha + deltaAngle && alpha3 >= actualAlpha - deltaAngle)
+        if (alpha3 <= actualAlpha + deltaAngle && alpha3 >= actualAlpha - deltaAngle ||
+            alpha3 <= actualAlpha + deltaAngle + 2 * kotlin.math.PI && alpha3 >= actualAlpha - deltaAngle + 2 * kotlin.math.PI ||
+            alpha3 <= actualAlpha + deltaAngle - 2 * kotlin.math.PI && alpha3 >= actualAlpha - deltaAngle - 2 * kotlin.math.PI
+        )
             return true
 
         val corner4 = Vec2Double(tileXIndex + 1 + bulletSize / 2, tileYIndex + 1 + bulletSize / 2)
-        var alpha4 =
+        val alpha4 =
             atan2(corner4.y - unitCenter.y, corner4.x - unitCenter.x)
-        if (alpha4 < 0)
-            alpha4 += kotlin.math.PI * 2
-        if (alpha4 <= actualAlpha + deltaAngle && alpha4 >= actualAlpha - deltaAngle)
+
+        if (alpha4 <= actualAlpha + deltaAngle && alpha4 >= actualAlpha - deltaAngle ||
+            alpha4 <= actualAlpha + deltaAngle + 2 * kotlin.math.PI && alpha4 >= actualAlpha - deltaAngle + 2 * kotlin.math.PI ||
+            alpha4 <= actualAlpha + deltaAngle - 2 * kotlin.math.PI && alpha4 >= actualAlpha - deltaAngle - 2 * kotlin.math.PI
+        )
             return true
         val s1 = sign(actualAlpha - alpha1)
         if (s1 != sign(actualAlpha - alpha2) || s1 != sign(actualAlpha - alpha3) || s1 != sign(actualAlpha - alpha4))
