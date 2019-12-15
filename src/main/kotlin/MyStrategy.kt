@@ -225,7 +225,10 @@ class MyStrategy {
             prevPoint = route[0]
             if (route.size >= 2)
                 nextPoint = route[1]
-            if (route.size >= 3 && route[2].position.x == route[0].position.x) {
+            if (route.size >= 3 &&
+                route[2].position.x == route[0].position.x &&
+                game.level.tiles[route[1].position.x][route[1].position.y].discriminant != Tile.LADDER.discriminant
+            ) {
                 route[1].position.x = route[0].position.x
                 nextPoint?.position?.x = route[0].position.x
             }
@@ -508,6 +511,11 @@ class MyStrategy {
                     currentNode
                 )
                 nodes.add(node)
+
+                nodes.removeIf {
+                    it.position.x == direction.x && it.position.y == direction.y &&
+                            it.gen == currentNode.gen + 1 && it.jumpTile > jmpStep && jmpStep > 0
+                }
                 for (target in targets) {
                     if (abs(node.position.x + unitSize.x / 2 - target.pos.x) < (target.size.x / 2) &&
                         abs(node.position.y - target.pos.y) < (target.size.y)
