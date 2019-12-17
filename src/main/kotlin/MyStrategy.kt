@@ -59,7 +59,12 @@ class MyStrategy {
             }
         }
 
-        for (other in game.units.filter { it.health > 0 }) {
+        val units = game.units.filter { it.health > 0 }
+
+        if (units.none { it.id == nearestEnemy?.id })
+            nearestEnemy = null
+
+        for (other in units) {
             if (other.playerId != unit.playerId) {
                 if (nearestEnemy == null || nearestEnemy?.id == other.id || distanceSqr(
                         unit.position,
