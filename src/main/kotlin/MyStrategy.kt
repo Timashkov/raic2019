@@ -25,13 +25,13 @@ class MyStrategy {
     private var unitHeight = 0.0
     private var unitWidth = 0.0
     private var enemyIndex = 0
-    private val route = ArrayList<Node>()
-    private var prevPoint: Node? = null
-    private var nextPoint: Node? = null
+    private val route = HashMap<Int, ArrayList<Node>>()
+    private var prevPoint: HashMap<Int, Node> = HashMap()
+    private var nextPoint: HashMap<Int, Node> = HashMap()
     private var nearestEnemy: model.Unit? = null
     private var goToDefault = false
     private lateinit var default: Vec2Double
-    private lateinit var unitPrevPosition: Vec2Double
+    private val unitPrevPosition: HashMap<Int, Vec2Double> = HashMap()
 
 
     fun getAction(unit: model.Unit, game: Game, debug: Debug): UnitAction {
@@ -48,7 +48,7 @@ class MyStrategy {
             unitHeight = game.units[0].size.y
             unitWidth = game.units[0].size.x
             default = unit.position
-            unitPrevPosition = unit.position
+            unitPrevPosition[unit.id] = unit.position
         }
 
         val level = ArrayList<ArrayList<TileMarked>>()
@@ -59,7 +59,7 @@ class MyStrategy {
             }
         }
 
-        for (other in game.units) {
+        for (other in game.units.filter { it.health > 0 }) {
             if (other.playerId != unit.playerId) {
                 if (nearestEnemy == null || nearestEnemy?.id == other.id || distanceSqr(
                         unit.position,
@@ -75,14 +75,17 @@ class MyStrategy {
                     unit.health < game.properties.unitMaxHealth * 3 / 4)
             && route.isNotEmpty()
         ) {
-            val pos = Vec2Int(route[route.size - 1].position.x, route[route.size - 1].position.y)
+            val pos = Vec2Int(
+                route[unit.id]?.get(route.size - 1)?.position?.x ?: 0,
+                route[unit.id]?.get(route.size - 1)?.position?.y ?: 0
+            )
             if (game.lootBoxes.none { it.item is Item.HealthPack && it.position.x.toInt() == pos.x && it.position.y.toInt() == pos.y } &&
                 game.lootBoxes.any { it.item is Item.HealthPack })
                 route.clear()
         }
 
         if (route.isEmpty()) {
-            nextPoint = Node(
+            nextPoint[unit.id] = Node(
                 position = Vec2Int(unit.position.x.toInt(), unit.position.y.toInt()),
                 jumpTile = if (unit.jumpState.canJump && unit.jumpState.maxTime < game.properties.unitJumpTime) getJumpTile(
                     unit.jumpState.maxTime,
@@ -93,102 +96,108 @@ class MyStrategy {
                 ) else -1,
                 gen = 0
             )
-            route.addAll(
-                when {
-                    (goToDefault || (unit.health < game.properties.unitMaxHealth && unit.health < (nearestEnemy?.health
-                        ?: unit.health) ||
-                            unit.health < game.properties.unitMaxHealth * 3 / 4)) &&
-                            game.lootBoxes.any { it.item is Item.HealthPack } -> {
+            route[unit.id] = ArrayList<Node>().apply {
+                addAll(
+                    when {
+                        (goToDefault || (unit.health < game.properties.unitMaxHealth && unit.health < (nearestEnemy?.health
+                            ?: unit.health) ||
+                                unit.health < game.properties.unitMaxHealth * 3 / 4)) &&
+                                game.lootBoxes.any { it.item is Item.HealthPack } -> {
 
-                        val targets1 = game.lootBoxes.filter {
-                            it.item is Item.HealthPack &&
-                                    abs(
-                                        it.position.x - (nearestEnemy?.position?.x ?: 0.0)
-                                    ) > abs(it.position.x - unit.position.x)
-                        }.map { lootBox ->
-                            SquareObject(
-                                lootBox.position,
-                                lootBox.size,
-                                false
-                            )
-                        }
-
-                        val targets2 = game.lootBoxes.filter {
-                            it.item is Item.HealthPack
-                        }.map { lootBox ->
-                            SquareObject(
-                                lootBox.position,
-                                lootBox.size,
-                                false
-                            )
-                        }
-
-                        val localRoute = ArrayList<Node>()
-                        buildPath(
-                            unit,
-                            targets1,
-                            level,
-                            debug,
-                            localRoute,
-                            nextPoint
-                        )
-                        if (localRoute.isEmpty()) {
-                            buildPath(
-                                unit,
-                                targets2,
-                                level,
-                                debug,
-                                localRoute,
-                                nextPoint
-                            )
-                        }
-                        if (localRoute.isNotEmpty()) {
-                            localRoute.reverse()
-                        }
-                        localRoute
-                    }
-                    unit.weapon == null && game.lootBoxes.any { it.item is Item.Weapon } -> {
-                        val localRoute = ArrayList<Node>()
-                        buildPath(
-                            unit,
-                            game.lootBoxes.filter { it.item is Item.Weapon }.map { lootBox ->
+                            val targets1 = game.lootBoxes.filter {
+                                it.item is Item.HealthPack &&
+                                        abs(
+                                            it.position.x - (nearestEnemy?.position?.x ?: 0.0)
+                                        ) > abs(it.position.x - unit.position.x)
+                            }.map { lootBox ->
                                 SquareObject(
                                     lootBox.position,
                                     lootBox.size,
                                     false
                                 )
-                            },
-                            level,
-                            debug,
-                            localRoute,
-                            nextPoint
-                        )
-                        if (localRoute.isNotEmpty()) {
-                            localRoute.reverse()
+                            }
+
+                            val targets2 = game.lootBoxes.filter {
+                                it.item is Item.HealthPack
+                            }.map { lootBox ->
+                                SquareObject(
+                                    lootBox.position,
+                                    lootBox.size,
+                                    false
+                                )
+                            }
+
+                            val localRoute = ArrayList<Node>()
+                            buildPath(
+                                unit,
+                                targets1,
+                                level,
+                                debug,
+                                game,
+                                localRoute,
+                                nextPoint[unit.id]
+                            )
+                            if (localRoute.isEmpty()) {
+                                buildPath(
+                                    unit,
+                                    targets2,
+                                    level,
+                                    debug,
+                                    game,
+                                    localRoute,
+                                    nextPoint[unit.id]
+                                )
+                            }
+                            if (localRoute.isNotEmpty()) {
+                                localRoute.reverse()
+                            }
+                            localRoute
                         }
-                        localRoute
-                    }
-                    goToDefault -> {
-                        val localRoute = ArrayList<Node>()
-                        buildPath(
-                            unit,
-                            listOf(SquareObject(default, unit.size, false)),
-                            level,
-                            debug,
-                            localRoute,
-                            nextPoint
-                        )
-                        if (localRoute.isNotEmpty()) {
-                            localRoute.reverse()
+                        unit.weapon == null && game.lootBoxes.any { it.item is Item.Weapon } -> {
+                            val localRoute = ArrayList<Node>()
+                            buildPath(
+                                unit,
+                                game.lootBoxes.filter { it.item is Item.Weapon }.map { lootBox ->
+                                    SquareObject(
+                                        lootBox.position,
+                                        lootBox.size,
+                                        false
+                                    )
+                                },
+                                level,
+                                debug,
+                                game,
+                                localRoute,
+                                nextPoint[unit.id]
+                            )
+                            if (localRoute.isNotEmpty()) {
+                                localRoute.reverse()
+                            }
+                            localRoute
                         }
-                        localRoute
+                        goToDefault -> {
+                            val localRoute = ArrayList<Node>()
+                            buildPath(
+                                unit,
+                                listOf(SquareObject(default, unit.size, false)),
+                                level,
+                                debug,
+                                game,
+                                localRoute,
+                                nextPoint[unit.id]
+                            )
+                            if (localRoute.isNotEmpty()) {
+                                localRoute.reverse()
+                            }
+                            localRoute
+                        }
+                        else -> {
+                            enemyIndex = 5
+                            ArrayList()
+                        }
                     }
-                    else -> {
-                        enemyIndex = 5
-                        ArrayList()
-                    }
-                }
-            )
+                )
+            }
         }
 
 
@@ -208,48 +217,52 @@ class MyStrategy {
                     arrayListOf(enSquare),
                     level,
                     debug,
+                    game,
                     localRoute,
-                    nextPoint?.apply { goingToEnemy = true }
+                    nextPoint[unit.id]?.apply { goingToEnemy = true }
                 )
                 localRoute.reverse()
-                route.addAll(localRoute)
+                route[unit.id] = ArrayList<Node>().apply { addAll(localRoute) }
             }
         }
 
-        if (route.isNotEmpty() &&
-            route[0].position.x <= unit.position.x &&
-            (route[0].position.x + 1) >= unit.position.x &&
-            route[0].position.y <= unit.position.y &&
-            (route[0].position.y) + 1 >= unit.position.y
+        if (!route[unit.id].isNullOrEmpty() &&
+            route[unit.id]?.get(0)?.position?.x ?: 0 <= unit.position.x &&
+            (route[unit.id]?.get(0)?.position?.x ?: 0 + 1) >= unit.position.x &&
+            route[unit.id]?.get(0)?.position?.y ?: 0 <= unit.position.y &&
+            (route[unit.id]?.get(0)?.position?.y ?: 0) + 1 >= unit.position.y
         ) {
-            prevPoint = route[0]
-            if (route.size >= 2)
-                nextPoint = route[1]
-            if (route.size >= 3 &&
-                route[2].position.x == route[0].position.x &&
-                game.level.tiles[route[1].position.x][route[1].position.y].discriminant != Tile.LADDER.discriminant
+            prevPoint[unit.id] = route[unit.id]!![0]
+            if (route[unit.id]?.size ?: 0 >= 2)
+                nextPoint[unit.id] = route[unit.id]!![1]
+            if (route[unit.id]?.size ?: 0 >= 3 &&
+                route[unit.id]!![2].position.x == route[unit.id]!![0].position.x &&
+                game.level.tiles[route[unit.id]!![1].position.x][route[unit.id]!![1].position.y].discriminant != Tile.LADDER.discriminant
             ) {
-                route[1].position.x = route[0].position.x
-                nextPoint?.position?.x = route[0].position.x
+                route[unit.id]!![1].position.x = route[unit.id]!![0].position.x
+                nextPoint[unit.id]?.position?.x = route[unit.id]!![0].position.x
             }
 
-            route.removeAt(0)
+            route[unit.id]?.removeAt(0)
         }
 
-        drawRoute(route, debug)
+        // drawRoute(route[unit.id], debug)
 
         val targetPos = if (route.isEmpty()) {
             nearestEnemy?.position ?: Vec2Double(0.5, 0.5)
         } else {
-            Vec2Double(route[0].position.x + 0.5, route[0].position.y.toDouble())
+            Vec2Double(route[unit.id]!![0].position.x + 0.5, route[unit.id]!![0].position.y.toDouble())
         }
 
-        if (distanceSqr(targetPos, unitPrevPosition) < distanceSqr(targetPos, unit.position) &&
+        if (distanceSqr(targetPos, unitPrevPosition[unit.id] ?: Vec2Double(0.0, 0.0)) < distanceSqr(
+                targetPos,
+                unit.position
+            ) &&
             distanceSqr(targetPos, unit.position) > 5
         ) {
             route.clear()
         }
-        unitPrevPosition = unit.position
+        unitPrevPosition[unit.id] = unit.position
 
         var aim = Vec2Double(0.0, 0.0)
         nearestEnemy?.let {
@@ -262,9 +275,9 @@ class MyStrategy {
         val action = UnitAction()
 
         action.velocity = getVelocity(unit.position.x, targetPos.x)
-        action.jump = targetPos.y > prevPoint?.position?.y?.toDouble() ?: 0.0 || targetPos.y > unit.position.y
+        action.jump = targetPos.y > prevPoint[unit.id]?.position?.y?.toDouble() ?: 0.0 || targetPos.y > unit.position.y
         action.jumpDown =
-            targetPos.y < prevPoint?.position?.y?.toDouble() ?: 31.0 && targetPos.y < unit.position.y - jumpPerTick
+            targetPos.y < prevPoint[unit.id]?.position?.y?.toDouble() ?: 31.0 && targetPos.y < unit.position.y - jumpPerTick
 
         action.aim = aim
 //        action.reload = false
@@ -357,6 +370,7 @@ class MyStrategy {
         targets: List<SquareObject>,
         level: ArrayList<ArrayList<TileMarked>>,
         debug: Debug,
+        game: Game,
         route: ArrayList<Node>,
         knownNode: Node? = null
     ) {
@@ -394,7 +408,7 @@ class MyStrategy {
 
         while (nodes.isNotEmpty() && r == null) {
             val n = nodes.poll()
-            r = checkTiles(n, unit.size, targets, level, debug, nodes)
+            r = checkTiles(n, unit.size, targets, level, debug, game, unit, nodes)
         }
 
         level.forEach { it.forEach { jt -> jt.mark = 0 } }
@@ -414,6 +428,8 @@ class MyStrategy {
         targets: List<SquareObject>,
         level: ArrayList<ArrayList<TileMarked>>,
         debug: Debug,
+        game: Game,
+        unit: Unit,
         nodes: LinkedBlockingQueue<Node>
     ): Node? {
 
@@ -430,7 +446,7 @@ class MyStrategy {
             currentNode.boostJumpTile = 0
         }
 
-        val canGoUp = canGoUpTile(currentNode, level)
+        val canGoUp = canGoUpTile(currentNode, level, game, unit)
         if (!canGoUp) {
             currentNode.boostJumpTile = -1
             currentNode.jumpTile = -1
@@ -541,7 +557,12 @@ class MyStrategy {
         return null
     }
 
-    private fun canGoUpTile(currentNode: Node, level: ArrayList<ArrayList<TileMarked>>): Boolean {
+    private fun canGoUpTile(
+        currentNode: Node,
+        level: ArrayList<ArrayList<TileMarked>>,
+        game: Game,
+        unit: Unit
+    ): Boolean {
         //up restriction
         if (currentNode.position.y >= (level[0].size - unitHeight).toInt() ||
             level[currentNode.position.x][currentNode.position.y + 2].type == Tile.WALL ||
@@ -552,27 +573,41 @@ class MyStrategy {
             return false
         }
 
-        if (abs(nearestEnemy?.position?.x ?: -1.0 - currentNode.position.x) < unitWidth) {
-            val enemyPositionYDiff =
-                (nearestEnemy?.position?.y ?: 31.0) + (nearestEnemy?.size?.y
-                    ?: 0.0) - (currentNode.position.y + unitHeight)
-            if (enemyPositionYDiff > jumpPerTick && enemyPositionYDiff < 1)
-            //вражина мешает
-                return false
+        game.units.forEach {
+            if (it.id != unit.id) {
+
+                if (abs(it.position.x - currentNode.position.x) < unitWidth) {
+                    val enemyPositionYDiff =
+                        it.position.y + it.size.y - (currentNode.position.y + unitHeight)
+                    if (enemyPositionYDiff > jumpPerTick && enemyPositionYDiff < 1)
+                    //вражина мешает
+                        return@canGoUpTile false
+                }
+            }
         }
+
         // end up restriction
 
         if (level[currentNode.position.x][currentNode.position.y].type == Tile.LADDER ||
             currentNode.position.y <= 0 ||
-            level[currentNode.position.x][currentNode.position.y - 1].type != Tile.EMPTY || (
-                    (abs((nearestEnemy?.position?.y ?: 0.0) + unitHeight - currentNode.position.y) <= jumpPerTick &&
-                            abs(nearestEnemy?.position?.x ?: -1.0 - currentNode.position.x) <= 1)
-                    )
+            level[currentNode.position.x][currentNode.position.y - 1].type != Tile.EMPTY
         ) {
             // когда не пусто под ногами - можно прыгать
             if (currentNode.jumpTile != 0)
                 currentNode.jumpTile = 0
             return true
+        }
+
+        game.units.forEach {
+            if (it.id != unit.id) {
+                if ((abs((nearestEnemy?.position?.y ?: 0.0) + unitHeight - currentNode.position.y) <= jumpPerTick &&
+                            abs(nearestEnemy?.position?.x ?: -1.0 - currentNode.position.x) <= 1)
+                )
+                // когда не пусто под ногами - можно прыгать
+                    if (currentNode.jumpTile != 0)
+                        currentNode.jumpTile = 0
+                return@canGoUpTile true
+            }
         }
 
         if ((currentNode.jumpTile == -1 &&
@@ -615,7 +650,7 @@ class MyStrategy {
                 dx * ticksPerSec
             }
             abs(dx) < 0.001 -> {
-                0.0001 // fix for infinite moving
+                sign(dx) * ticksPerSec // fix for infinite moving
             }
             else -> {
                 dx * ticksPerSec
