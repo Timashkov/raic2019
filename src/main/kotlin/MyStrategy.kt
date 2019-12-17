@@ -248,7 +248,7 @@ class MyStrategy {
 
         // drawRoute(route[unit.id], debug)
 
-        val targetPos = if (route.isEmpty()) {
+        val targetPos = if (route[unit.id].isNullOrEmpty()) {
             nearestEnemy?.position ?: Vec2Double(0.5, 0.5)
         } else {
             Vec2Double(route[unit.id]!![0].position.x + 0.5, route[unit.id]!![0].position.y.toDouble())
@@ -390,13 +390,7 @@ class MyStrategy {
             knownNode
 
         for (target in targets) {
-            if (unitTargetCollisionDetected(
-                    unit.position,
-                    unit.size,
-                    target.pos,
-                    target.size
-                )
-            ) {
+            if (isTargetAchieved(target, firstNode, unit)) {
                 route.add(firstNode.parentLessClone())
                 return
             }
@@ -408,7 +402,7 @@ class MyStrategy {
 
         while (nodes.isNotEmpty() && r == null) {
             val n = nodes.poll()
-            r = checkTiles(n, unit.size, targets, level, debug, game, unit, nodes)
+            r = checkTiles(n, targets, level, debug, game, unit, nodes)
         }
 
         level.forEach { it.forEach { jt -> jt.mark = 0 } }
@@ -424,7 +418,6 @@ class MyStrategy {
 
     private fun checkTiles(
         currentNode: Node,
-        unitSize: Vec2Double,
         targets: List<SquareObject>,
         level: ArrayList<ArrayList<TileMarked>>,
         debug: Debug,
@@ -452,28 +445,19 @@ class MyStrategy {
             currentNode.jumpTile = -1
         }
 
-        for (i in 0..7) {
+        for (i in 0..4) {
             val direction = Vec2Int(currentNode.position.x, currentNode.position.y)
             when (i) {
                 0 -> direction.apply { x += if (dx > 0) 1 else -1 }
-                1 -> direction.apply { x -= if (dx > 0) 1 else -1 }
+                1 -> direction.apply {
+                    x += if (dx > 0) 1 else -1
+                    y += if (dy > 0) 1 else -1
+                }
                 2 -> direction.apply {
                     x += if (dx > 0) 1 else -1
-                    y += if (dy > 0) 1 else -1
-                }
-                3 -> direction.apply {
-                    x -= if (dx > 0) 1 else -1
-                    y += if (dy > 0) 1 else -1
-                }
-                4 -> direction.apply {
-                    x += if (dx > 0) 1 else -1
                     y -= if (dy > 0) 1 else -1
                 }
-                5 -> direction.apply {
-                    x -= if (dx > 0) 1 else -1
-                    y -= if (dy > 0) 1 else -1
-                }
-                6 -> direction.apply { y += if (dy > 0) 1 else -1 }
+                3 -> direction.apply { y += if (dy > 0) 1 else -1 }
                 else -> direction.apply { y -= if (dy > 0) 1 else -1 }
             }
 
@@ -487,7 +471,7 @@ class MyStrategy {
                 continue
             }
 
-            if (direction.y == currentNode.position.y - 1 && !canGoDown(currentNode, level, direction.x)) {
+            if (direction.y == currentNode.position.y - 1 && !canGoDown(currentNode, level, direction.x, game, unit)) {
                 continue
             }
 
@@ -508,7 +492,7 @@ class MyStrategy {
                 direction.y < level[0].size - 1 &&
                 level[direction.x][direction.y].type != Tile.WALL &&
                 level[direction.x][direction.y + 1].type != Tile.WALL &&
-                nearestEnemyIsNotBreak(direction, currentNode) &&
+                nearestUnitIsNotBreak(direction, currentNode, game, unit) &&
                 level[direction.x][direction.y].mark < 10 &&
                 nodes.none {
                     it.position.x == direction.x && it.position.y == direction.y &&
@@ -533,28 +517,24 @@ class MyStrategy {
                             it.gen == currentNode.gen + 1 && it.jumpTile > jmpStep && jmpStep > 0
                 }
                 for (target in targets) {
-                    if (abs(node.position.x + unitSize.x / 2 - target.pos.x) < (target.size.x / 2) &&
-                        abs(node.position.y - target.pos.y) < (target.size.y)
-                    )
-                        return node
-
-                    if (target.isEnemy && distanceSqr(
-                            target.pos,
-                            Vec2Double(node.position.x.toDouble(), node.position.y.toDouble())
-                        ) < 5
-                    )
-//
-//                        target.pos.x == nearestEnemy?.position?.x &&
-//                        target.pos.y == nearestEnemy?.position?.y &&
-//                        abs(node.position.x + (if (target.isEnemy) unitSize.x / 2 else 0.0) - target.pos.x) < (unitSize.x + (if (target.isEnemy) target.size.x else 0.0)) &&
-//                        abs(node.position.y + (if (target.isEnemy) unitSize.y / 2 else 0.0) - target.pos.y) < (target.size.y + (if (target.isEnemy) unitSize.y else 0.0))
-//                    )
+                    if (isTargetAchieved(target, node, unit))
                         return node
                 }
             }
         }
 
         return null
+    }
+
+    private fun isTargetAchieved(target: SquareObject, node: Node, unit: Unit): Boolean {
+        if (abs(node.position.x + unit.size.x / 2 - target.pos.x) < (target.size.x / 2) &&
+            abs(node.position.y - target.pos.y) < (target.size.y)
+        )
+            return true
+
+        if (target.isEnemy && (abs(node.position.x - target.pos.x) < 3 || abs(node.position.y - target.pos.y) < 3))
+            return true
+        return false
     }
 
     private fun canGoUpTile(
@@ -600,8 +580,8 @@ class MyStrategy {
 
         game.units.forEach {
             if (it.id != unit.id) {
-                if ((abs((nearestEnemy?.position?.y ?: 0.0) + unitHeight - currentNode.position.y) <= jumpPerTick &&
-                            abs(nearestEnemy?.position?.x ?: -1.0 - currentNode.position.x) <= 1)
+                if ((abs(it.position.y + unitHeight - currentNode.position.y) <= jumpPerTick &&
+                            abs(it.position.x - currentNode.position.x) <= 1)
                 )
                 // когда не пусто под ногами - можно прыгать
                     if (currentNode.jumpTile != 0)
@@ -619,18 +599,25 @@ class MyStrategy {
         return true
     }
 
-    private fun canGoDown(currentNode: Node, level: ArrayList<ArrayList<TileMarked>>, newX: Int): Boolean {
+    private fun canGoDown(
+        currentNode: Node,
+        level: ArrayList<ArrayList<TileMarked>>,
+        newX: Int,
+        game: Game,
+        unit: Unit
+    ): Boolean {
         if (currentNode.boostJumpTile != -1)
             return false
         if (currentNode.position.y <= 0 ||
-            level[currentNode.position.x][currentNode.position.y - 1].type == Tile.WALL ||
-            (abs(
-                (nearestEnemy?.position?.y ?: 0.0) + (nearestEnemy?.size?.y ?: 0.0) - currentNode.position.y
-            ) <= jumpPerTick &&
-                    abs(nearestEnemy?.position?.x ?: -1.0 - currentNode.position.x) <= (nearestEnemy?.size?.x ?: 0.0 / 2
-            + unitWidth / 2))
+            level[currentNode.position.x][currentNode.position.y - 1].type == Tile.WALL
         )
             return false
+        game.units.forEach {
+            if (it.id != unit.id && abs(it.position.y + it.size.y - currentNode.position.y) <= jumpPerTick &&
+                abs(it.position.x - currentNode.position.x) <= (it.size.x / 2 + unitWidth / 2)
+            )
+                return@canGoDown false
+        }
         return true
     }
 
@@ -658,20 +645,28 @@ class MyStrategy {
         }
     }
 
-    private fun nearestEnemyIsNotBreak(direction: Vec2Int, currentNode: Node): Boolean {
-        nearestEnemy?.let { enemy ->
-            return if (direction.x > currentNode.position.x) {
-                enemy.position.x < currentNode.position.x ||
-                        direction.x < enemy.position.x - enemy.size.x * 2 ||
-                        (direction.y > (enemy.position.y + enemy.size.y) ||
-                                direction.y + unitHeight < enemy.position.y)
-            } else {
-                enemy.position.x > currentNode.position.x ||
-                        direction.x > enemy.position.x + enemy.size.x * 2 ||
-                        (direction.y > (enemy.position.y + enemy.size.y) ||
-                                direction.y + unitHeight < enemy.position.y)
+    private fun nearestUnitIsNotBreak(direction: Vec2Int, currentNode: Node, game: Game, unit: Unit): Boolean {
+        game.units.forEach {
+            if (it.id != unit.id) {
+                if (direction.x > currentNode.position.x) {
+                    if (!(it.position.x < currentNode.position.x ||
+                                direction.x < it.position.x - it.size.x * 2 ||
+                                (direction.y > (it.position.y + it.size.y) ||
+                                        direction.y + unitHeight < it.position.y))
+                    )
+                        return@nearestUnitIsNotBreak false
+
+                } else {
+                    if (!(it.position.x > currentNode.position.x ||
+                                direction.x > it.position.x + it.size.x * 2 ||
+                                (direction.y > (it.position.y + it.size.y) ||
+                                        direction.y + unitHeight < it.position.y))
+                    )
+                        return@nearestUnitIsNotBreak false
+                }
             }
         }
+
         return true
     }
 
