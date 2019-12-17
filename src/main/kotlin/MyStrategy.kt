@@ -73,18 +73,18 @@ class MyStrategy {
 
         if ((unit.health < game.properties.unitMaxHealth && unit.health < (nearestEnemy?.health ?: unit.health) ||
                     unit.health < game.properties.unitMaxHealth * 3 / 4)
-            && route.isNotEmpty()
+            && !route[unit.id].isNullOrEmpty()
         ) {
             val pos = Vec2Int(
-                route[unit.id]?.get(route.size - 1)?.position?.x ?: 0,
-                route[unit.id]?.get(route.size - 1)?.position?.y ?: 0
+                route[unit.id]?.get((route[unit.id]!!.size) - 1)?.position?.x ?: 0,
+                route[unit.id]?.get((route[unit.id]!!.size) - 1)?.position?.y ?: 0
             )
             if (game.lootBoxes.none { it.item is Item.HealthPack && it.position.x.toInt() == pos.x && it.position.y.toInt() == pos.y } &&
                 game.lootBoxes.any { it.item is Item.HealthPack })
-                route.clear()
+                route[unit.id]?.clear()
         }
 
-        if (route.isEmpty()) {
+        if (route[unit.id].isNullOrEmpty()) {
             nextPoint[unit.id] = Node(
                 position = Vec2Int(unit.position.x.toInt(), unit.position.y.toInt()),
                 jumpTile = if (unit.jumpState.canJump && unit.jumpState.maxTime < game.properties.unitJumpTime) getJumpTile(
@@ -208,8 +208,8 @@ class MyStrategy {
                 size = nearestEnemy?.size ?: Vec2Double(0.0, 0.0),
                 isEnemy = true
             )
-            if ((!goToDefault && unit.health == game.properties.unitMaxHealth) || route.isEmpty()) {
-                route.clear()
+            if ((!goToDefault && unit.health == game.properties.unitMaxHealth) || route[unit.id].isNullOrEmpty()) {
+                route[unit.id]?.clear()
                 val localRoute = ArrayList<Node>()
 
                 buildPath(
@@ -227,10 +227,10 @@ class MyStrategy {
         }
 
         if (!route[unit.id].isNullOrEmpty() &&
-            route[unit.id]?.get(0)?.position?.x ?: 0 <= unit.position.x &&
-            (route[unit.id]?.get(0)?.position?.x ?: 0 + 1) >= unit.position.x &&
-            route[unit.id]?.get(0)?.position?.y ?: 0 <= unit.position.y &&
-            (route[unit.id]?.get(0)?.position?.y ?: 0) + 1 >= unit.position.y
+            route[unit.id]!![0].position.x <= unit.position.x &&
+            route[unit.id]!![0].position.x + 1 >= unit.position.x &&
+            route[unit.id]!![0].position.y <= unit.position.y &&
+            route[unit.id]!![0].position.y + 1 >= unit.position.y
         ) {
             prevPoint[unit.id] = route[unit.id]!![0]
             if (route[unit.id]?.size ?: 0 >= 2)
@@ -260,7 +260,7 @@ class MyStrategy {
             ) &&
             distanceSqr(targetPos, unit.position) > 5
         ) {
-            route.clear()
+            route[unit.id]?.clear()
         }
         unitPrevPosition[unit.id] = unit.position
 
@@ -297,18 +297,18 @@ class MyStrategy {
                     ) < 5
                 ) {
                     goToDefault = true
-                    route.clear()
+                    route[unit.id]?.clear()
                 }
 
                 if (goToDefault) {
                     goToDefault = false
-                    route.clear()
+                    route[unit.id]?.clear()
                 }
             } else {
                 action.shoot = false
                 if (distanceSqr(unit.position, nearestEnemy?.position ?: Vec2Double()) < 5) {
                     goToDefault = true
-                    route.clear()
+                    route[unit.id]?.clear()
                 }
             }
 // add intelli
@@ -316,16 +316,16 @@ class MyStrategy {
 //                action.reload = true
 //            }
         }
-        if (unit.weapon?.typ != WeaponType.PISTOL) {
-            for (item in game.lootBoxes) {
-
-                if (item.item is Item.Weapon &&
-                    (item.item as Item.Weapon).weaponType == WeaponType.PISTOL &&
-                    unitTargetCollisionDetected(unit.position, unit.size, item.position, item.size)
-                )
-                    action.swapWeapon = true
-            }
-        }
+//        if (unit.weapon?.typ != WeaponType.PISTOL) {
+//            for (item in game.lootBoxes) {
+//
+//                if (item.item is Item.Weapon &&
+//                    (item.item as Item.Weapon).weaponType == WeaponType.PISTOL &&
+//                    unitTargetCollisionDetected(unit.position, unit.size, item.position, item.size)
+//                )
+//                    action.swapWeapon = true
+//            }
+//        }
         action.plantMine = false
 
 //        if (!::unitMovement.isInitialized)
@@ -445,19 +445,28 @@ class MyStrategy {
             currentNode.jumpTile = -1
         }
 
-        for (i in 0..4) {
+        for (i in 0..7) {
             val direction = Vec2Int(currentNode.position.x, currentNode.position.y)
             when (i) {
                 0 -> direction.apply { x += if (dx > 0) 1 else -1 }
-                1 -> direction.apply {
+                1 -> direction.apply { x -= if (dx > 0) 1 else -1 }
+                2 -> direction.apply {
                     x += if (dx > 0) 1 else -1
                     y += if (dy > 0) 1 else -1
                 }
-                2 -> direction.apply {
+                3 -> direction.apply {
+                    x -= if (dx > 0) 1 else -1
+                    y += if (dy > 0) 1 else -1
+                }
+                4 -> direction.apply {
                     x += if (dx > 0) 1 else -1
                     y -= if (dy > 0) 1 else -1
                 }
-                3 -> direction.apply { y += if (dy > 0) 1 else -1 }
+                5 -> direction.apply {
+                    x -= if (dx > 0) 1 else -1
+                    y -= if (dy > 0) 1 else -1
+                }
+                6 -> direction.apply { y += if (dy > 0) 1 else -1 }
                 else -> direction.apply { y -= if (dy > 0) 1 else -1 }
             }
 
@@ -532,7 +541,7 @@ class MyStrategy {
         )
             return true
 
-        if (target.isEnemy && (abs(node.position.x - target.pos.x) < 3 || abs(node.position.y - target.pos.y) < 3))
+        if (target.isEnemy && (abs(node.position.x - target.pos.x) < 4 && abs(node.position.y - target.pos.y) < 4))
             return true
         return false
     }
