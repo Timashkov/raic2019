@@ -76,7 +76,7 @@ class MyStrategy {
 
         if ((unit.health < game.properties.unitMaxHealth && unit.health < (nearestEnemy?.health ?: unit.health) ||
                     unit.health < game.properties.unitMaxHealth * 3 / 4)
-            && routes[unit.id]!!.isEmpty()
+            && !routes[unit.id]!!.isEmpty()
         ) {
             val target = routes[unit.id]!!.getTargetLootItem()
             if (target == null || game.lootBoxes.none {
@@ -90,8 +90,21 @@ class MyStrategy {
                                 it.value.getTargetLootItem()?.position?.x == lootbox.position.x &&
                                 it.value.getTargetLootItem()?.position?.y == lootbox.position.y
                     }
-                })
+                }) {
                 routes[unit.id]!!.clearRoute()
+                goToDefault = true
+            }
+        }
+
+        if (game.lootBoxes.count { lootbox ->
+                lootbox.item is Item.HealthPack && routes.none {
+                    it.key != unit.id &&
+                            it.value.getTargetLootItem()?.position?.x == lootbox.position.x &&
+                            it.value.getTargetLootItem()?.position?.y == lootbox.position.y
+                }
+            } == 1 && game.units.any { it.playerId == unit.playerId && it.id < unit.id }) {
+            routes[unit.id]!!.clearRoute()
+            goToDefault = true
         }
 
         if (routes[unit.id]!!.isEmpty()) {
@@ -258,13 +271,20 @@ class MyStrategy {
 
         // drawRoute(route[unit.id], debug)
 
-        val targetPos = routes[unit.id]?.getNextStep(unit, game) ?: nearestEnemy?.position ?: Vec2Double(0.5, 0.5)
+        var targetPos = routes[unit.id]?.getNextStep(unit, game)
+        if (targetPos == null) {
+            targetPos = if (game.units.any { it.playerId == unit.playerId && it.id > unit.id }) {
+                nearestEnemy?.position ?: Vec2Double(0.5, 0.5)
+            } else {
+                unit.position
+            }
+        }
 
-        if (distanceSqr(targetPos, routes[unit.id]?.getUnitPrevPosition() ?: Vec2Double(0.0, 0.0)) < distanceSqr(
-                targetPos,
+        if (distanceSqr(targetPos!!, routes[unit.id]?.getUnitPrevPosition() ?: Vec2Double(0.0, 0.0)) < distanceSqr(
+                targetPos!!,
                 unit.position
             ) &&
-            distanceSqr(targetPos, unit.position) > 5
+            distanceSqr(targetPos!!, unit.position) > 5
         ) {
             routes[unit.id]?.clearRoute()
         }
@@ -294,7 +314,7 @@ class MyStrategy {
             action.shoot = false
         } else {
             if (shootAllowed(unit, nearestEnemy, game, debug)) {
-                action.shoot = true// isShootEffective(unit, nearestEnemy!!)
+                action.shoot = !canShutTeammate(unit, game, nearestEnemy)// isShootEffective(unit, nearestEnemy!!)
 
                 enemyIndex++
 
@@ -433,8 +453,14 @@ class MyStrategy {
         nodes: LinkedBlockingQueue<Node>
     ): Node? {
 
-        val dx = targets[0].pos.x - currentNode.position.x
+        var dx = targets[0].pos.x - currentNode.position.x
         val dy = targets[0].pos.y - currentNode.position.y
+
+        if (targets[0].isEnemy &&
+            abs(currentNode.position.x - targets[0].pos.x) < 3 &&
+            abs(currentNode.position.y - targets[0].pos.y) < 3
+        )
+            dx *= -1
 
         if (currentNode.jumpTile >= maxJumpTiles.toInt() || currentNode.position.y < currentNode.parentNode?.position?.y ?: 0)
             currentNode.jumpTile = -1
@@ -452,28 +478,28 @@ class MyStrategy {
             currentNode.jumpTile = -1
         }
 
-        for (i in 0..7) {
+        for (i in 0..4) {
             val direction = Vec2Int(currentNode.position.x, currentNode.position.y)
             when (i) {
                 0 -> direction.apply { x += if (dx > 0) 1 else -1 }
-                1 -> direction.apply { x -= if (dx > 0) 1 else -1 }
+//                1 -> direction.apply { x -= if (dx > 0) 1 else -1 }
+                1 -> direction.apply {
+                    x += if (dx > 0) 1 else -1
+                    y += if (dy > 0) 1 else -1
+                }
+//                3 -> direction.apply {
+//                    x -= if (dx > 0) 1 else -1
+//                    y += if (dy > 0) 1 else -1
+//                }
                 2 -> direction.apply {
                     x += if (dx > 0) 1 else -1
-                    y += if (dy > 0) 1 else -1
-                }
-                3 -> direction.apply {
-                    x -= if (dx > 0) 1 else -1
-                    y += if (dy > 0) 1 else -1
-                }
-                4 -> direction.apply {
-                    x += if (dx > 0) 1 else -1
                     y -= if (dy > 0) 1 else -1
                 }
-                5 -> direction.apply {
-                    x -= if (dx > 0) 1 else -1
-                    y -= if (dy > 0) 1 else -1
-                }
-                6 -> direction.apply { y += if (dy > 0) 1 else -1 }
+//                5 -> direction.apply {
+//                    x -= if (dx > 0) 1 else -1
+//                    y -= if (dy > 0) 1 else -1
+//                }
+                3 -> direction.apply { y += if (dy > 0) 1 else -1 }
                 else -> direction.apply { y -= if (dy > 0) 1 else -1 }
             }
 
@@ -988,8 +1014,11 @@ class MyStrategy {
                 if (game.level.tiles[i][j].discriminant == Tile.WALL.discriminant) {
                     if (xl.toInt() == xr.toInt() || yt.toInt() == yb.toInt() ||
                         directrixTileCollision(
-                            i.toDouble(),
-                            j.toDouble(),
+                            Vec2Double(
+                                i.toDouble(),
+                                j.toDouble()
+                            ),
+                            Vec2Double(1.0, 1.0),
                             unitCenter,
                             enemyCenter,
                             unit.weapon!!.spread,
@@ -1057,8 +1086,11 @@ class MyStrategy {
                 for (j in bottom..top) {
                     if ((i < 0 || j < 0 || i >= game.level.tiles.size || j >= game.level.tiles[0].size || game.level.tiles[i][j].discriminant == Tile.WALL.discriminant)
                         && directrixTileCollision(
-                            i.toDouble(),
-                            j.toDouble(),
+                            Vec2Double(
+                                i.toDouble(),
+                                j.toDouble()
+                            ),
+                            Vec2Double(1.0, 1.0),
                             unitCenter,
                             enemyCenter,
                             unit.weapon!!.spread,
@@ -1088,9 +1120,46 @@ class MyStrategy {
         return true
     }
 
+    private fun canShutTeammate(unit: Unit, game: Game, aim: Unit?): Boolean {
+        if (aim == null)
+            return false
+        val aimCenter =
+            Vec2Double(aim.position.x, aim.position.y + aim.size.y / 2)
+        val unitCenter = Vec2Double(unit.position.x, unit.position.y + unit.size.y / 2)
+
+        val teammate = game.units.firstOrNull { it.playerId == unit.playerId && it.id != unit.id && it.health > 0 }
+        teammate?.let {
+            val distanceXTA = abs(it.position.x - aimCenter.x)
+            val distanceXUT = abs(it.position.x - unit.position.x)
+            val distanceXUA = abs(aimCenter.x - unit.position.x)
+            if (distanceXUA < distanceXUT || distanceXUA < distanceXTA)
+                return false
+
+            val distanceYTA = abs(it.position.y - aimCenter.y)
+            val distanceYUT = abs(it.position.y - unit.position.y)
+            val distanceYUA = abs(aimCenter.y - unit.position.y)
+            if (distanceYUA < distanceYUT || distanceYUA < distanceYTA)
+                return false
+
+            if (directrixTileCollision(
+                    Vec2Double(it.position.x - it.size.x / 2, it.position.y),
+                    it.size,
+                    unitCenter,
+                    aimCenter,
+                    unit.weapon!!.spread,
+                    game.properties.weaponParams[unit.weapon!!.typ]?.bullet?.size
+                        ?: 0.0
+                )
+            )
+                return true
+
+        }
+        return false
+    }
+
     private fun directrixTileCollision(
-        tileXIndex: Double,
-        tileYIndex: Double,
+        square: Vec2Double,
+        squareSize: Vec2Double,
         unitCenter: Vec2Double,
         aimCenter: Vec2Double,
         deltaAngle: Double,
@@ -1098,17 +1167,17 @@ class MyStrategy {
     ): Boolean {
 
         val bulletSqr = bulletSize * bulletSize
-        if (distanceSqr(Vec2Double(tileXIndex, tileYIndex), unitCenter) <= bulletSqr ||
-            distanceSqr(Vec2Double(tileXIndex + 1, tileYIndex), unitCenter) <= bulletSqr ||
-            distanceSqr(Vec2Double(tileXIndex, tileYIndex + 1), unitCenter) <= bulletSqr ||
-            distanceSqr(Vec2Double(tileXIndex + 1, tileYIndex + 1), unitCenter) <= bulletSqr
+        if (distanceSqr(Vec2Double(square.x, square.y), unitCenter) <= bulletSqr ||
+            distanceSqr(Vec2Double(square.x + squareSize.x, square.y), unitCenter) <= bulletSqr ||
+            distanceSqr(Vec2Double(square.x, square.y + squareSize.y), unitCenter) <= bulletSqr ||
+            distanceSqr(Vec2Double(square.x + squareSize.x, square.y + squareSize.y), unitCenter) <= bulletSqr
         ) {
             return true
         }
 
         val actualAlpha = atan2(aimCenter.y - unitCenter.y, aimCenter.x - unitCenter.x)
 
-        val corner1 = Vec2Double(tileXIndex - bulletSize / 2, tileYIndex - bulletSize / 2)
+        val corner1 = Vec2Double(square.x - bulletSize / 2, square.y - bulletSize / 2)
         val alpha1 = atan2(corner1.y - unitCenter.y, corner1.x - unitCenter.x)
         if (alpha1 <= actualAlpha + deltaAngle && alpha1 >= actualAlpha - deltaAngle ||
             alpha1 <= actualAlpha + deltaAngle + 2 * kotlin.math.PI && alpha1 >= actualAlpha - deltaAngle + 2 * kotlin.math.PI ||
@@ -1116,7 +1185,7 @@ class MyStrategy {
         )
             return true
 
-        val corner2 = Vec2Double(tileXIndex - bulletSize / 2, tileYIndex + 1 + bulletSize / 2)
+        val corner2 = Vec2Double(square.x - bulletSize / 2, square.y + squareSize.y + bulletSize / 2)
         val alpha2 = atan2(corner2.y - unitCenter.y, corner2.x - unitCenter.x)
 
         if (alpha2 <= actualAlpha + deltaAngle && alpha2 >= actualAlpha - deltaAngle ||
@@ -1125,7 +1194,7 @@ class MyStrategy {
         )
             return true
 
-        val corner3 = Vec2Double(tileXIndex + 1 + bulletSize / 2, tileYIndex - bulletSize / 2)
+        val corner3 = Vec2Double(square.x + squareSize.x + bulletSize / 2, square.y - bulletSize / 2)
         val alpha3 =
             atan2(corner3.y - unitCenter.y, corner3.x - unitCenter.x)
         if (alpha3 <= actualAlpha + deltaAngle && alpha3 >= actualAlpha - deltaAngle ||
@@ -1134,7 +1203,7 @@ class MyStrategy {
         )
             return true
 
-        val corner4 = Vec2Double(tileXIndex + 1 + bulletSize / 2, tileYIndex + 1 + bulletSize / 2)
+        val corner4 = Vec2Double(square.x + squareSize.x + bulletSize / 2, square.y + squareSize.y + bulletSize / 2)
         val alpha4 =
             atan2(corner4.y - unitCenter.y, corner4.x - unitCenter.x)
 
