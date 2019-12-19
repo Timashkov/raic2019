@@ -332,10 +332,32 @@ class MyStrategy {
                     routes[unit.id]?.clearRoute()
                 }
             } else {
-                action.shoot = false
-                if (distanceSqr(unit.position, nearestEnemy?.position ?: Vec2Double()) < 5) {
-                    goToDefault = true
-                    routes[unit.id]?.clearRoute()
+                val en =
+                    game.units.firstOrNull { it.playerId != unit.playerId && it.id != nearestEnemy?.id && it.health > 0 }
+                if (en != null && shootAllowed(unit, en, game, debug)) {
+                    action.shoot = !canShutTeammate(unit, game, en)// isShootEffective(unit, nearestEnemy!!)
+
+                    enemyIndex++
+
+                    if (unit.weapon?.magazine == 0 && distanceSqr(
+                            unit.position,
+                            nearestEnemy?.position ?: Vec2Double()
+                        ) < 5
+                    ) {
+                        goToDefault = true
+                        routes[unit.id]?.clearRoute()
+                    }
+
+                    if (goToDefault) {
+                        goToDefault = false
+                        routes[unit.id]?.clearRoute()
+                    }
+                } else {
+                    action.shoot = false
+                    if (distanceSqr(unit.position, nearestEnemy?.position ?: Vec2Double()) < 5) {
+                        goToDefault = true
+                        routes[unit.id]?.clearRoute()
+                    }
                 }
             }
 // add intelli
@@ -513,7 +535,14 @@ class MyStrategy {
                 continue
             }
 
-            if (direction.y == currentNode.position.y - 1 && !canGoDown(currentNode, level, direction.x, game, unit)) {
+            if (direction.y == currentNode.position.y - 1 && !canGoDown(
+                    currentNode,
+                    level,
+                    direction.x,
+                    game,
+                    unit
+                )
+            ) {
                 continue
             }
 
@@ -663,7 +692,11 @@ class MyStrategy {
         return true
     }
 
-    private fun canGoHorizontalTile(currentNode: Node, level: ArrayList<ArrayList<TileMarked>>, newX: Int): Boolean {
+    private fun canGoHorizontalTile(
+        currentNode: Node,
+        level: ArrayList<ArrayList<TileMarked>>,
+        newX: Int
+    ): Boolean {
         if (currentNode.boostJumpTile != -1)
             return false
         return currentNode.position.y == 0 ||
@@ -1178,39 +1211,49 @@ class MyStrategy {
         val actualAlpha = atan2(aimCenter.y - unitCenter.y, aimCenter.x - unitCenter.x)
 
         val corner1 = Vec2Double(square.x - bulletSize / 2, square.y - bulletSize / 2)
-        val alpha1 = atan2(corner1.y - unitCenter.y, corner1.x - unitCenter.x)
-        if (alpha1 <= actualAlpha + deltaAngle && alpha1 >= actualAlpha - deltaAngle ||
-            alpha1 <= actualAlpha + deltaAngle + 2 * kotlin.math.PI && alpha1 >= actualAlpha - deltaAngle + 2 * kotlin.math.PI ||
-            alpha1 <= actualAlpha + deltaAngle - 2 * kotlin.math.PI && alpha1 >= actualAlpha - deltaAngle - 2 * kotlin.math.PI
-        )
+        var alpha1 = atan2(corner1.y - unitCenter.y, corner1.x - unitCenter.x)
+        alpha1 = when {
+            (actualAlpha < 0 && alpha1 > 0) -> alpha1 - 2 * kotlin.math.PI
+            (actualAlpha > 0 && alpha1 < 0) -> alpha1 + 2 * kotlin.math.PI
+            else -> alpha1
+        }
+        if (alpha1 <= actualAlpha + deltaAngle && alpha1 >= actualAlpha - deltaAngle)
             return true
 
         val corner2 = Vec2Double(square.x - bulletSize / 2, square.y + squareSize.y + bulletSize / 2)
-        val alpha2 = atan2(corner2.y - unitCenter.y, corner2.x - unitCenter.x)
+        var alpha2 = atan2(corner2.y - unitCenter.y, corner2.x - unitCenter.x)
+        alpha2 = when {
+            (actualAlpha < 0 && alpha2 > 0) -> alpha2 - 2 * kotlin.math.PI
+            (actualAlpha > 0 && alpha2 < 0) -> alpha2 + 2 * kotlin.math.PI
+            else -> alpha2
+        }
 
-        if (alpha2 <= actualAlpha + deltaAngle && alpha2 >= actualAlpha - deltaAngle ||
-            alpha2 <= actualAlpha + deltaAngle + 2 * kotlin.math.PI && alpha2 >= actualAlpha - deltaAngle + 2 * kotlin.math.PI ||
-            alpha2 <= actualAlpha + deltaAngle - 2 * kotlin.math.PI && alpha2 >= actualAlpha - deltaAngle - 2 * kotlin.math.PI
-        )
+        if (alpha2 <= actualAlpha + deltaAngle && alpha2 >= actualAlpha - deltaAngle)
             return true
 
         val corner3 = Vec2Double(square.x + squareSize.x + bulletSize / 2, square.y - bulletSize / 2)
-        val alpha3 =
+        var alpha3 =
             atan2(corner3.y - unitCenter.y, corner3.x - unitCenter.x)
-        if (alpha3 <= actualAlpha + deltaAngle && alpha3 >= actualAlpha - deltaAngle ||
-            alpha3 <= actualAlpha + deltaAngle + 2 * kotlin.math.PI && alpha3 >= actualAlpha - deltaAngle + 2 * kotlin.math.PI ||
-            alpha3 <= actualAlpha + deltaAngle - 2 * kotlin.math.PI && alpha3 >= actualAlpha - deltaAngle - 2 * kotlin.math.PI
-        )
+        alpha3 = when {
+            (actualAlpha < 0 && alpha3 > 0) -> alpha3 - 2 * kotlin.math.PI
+            (actualAlpha > 0 && alpha3 < 0) -> alpha3 + 2 * kotlin.math.PI
+            else -> alpha3
+        }
+
+        if (alpha3 <= actualAlpha + deltaAngle && alpha3 >= actualAlpha - deltaAngle)
             return true
 
         val corner4 = Vec2Double(square.x + squareSize.x + bulletSize / 2, square.y + squareSize.y + bulletSize / 2)
-        val alpha4 =
+        var alpha4 =
             atan2(corner4.y - unitCenter.y, corner4.x - unitCenter.x)
 
-        if (alpha4 <= actualAlpha + deltaAngle && alpha4 >= actualAlpha - deltaAngle ||
-            alpha4 <= actualAlpha + deltaAngle + 2 * kotlin.math.PI && alpha4 >= actualAlpha - deltaAngle + 2 * kotlin.math.PI ||
-            alpha4 <= actualAlpha + deltaAngle - 2 * kotlin.math.PI && alpha4 >= actualAlpha - deltaAngle - 2 * kotlin.math.PI
-        )
+        alpha4 = when {
+            (actualAlpha < 0 && alpha4 > 0) -> alpha4 - 2 * kotlin.math.PI
+            (actualAlpha > 0 && alpha4 < 0) -> alpha4 + 2 * kotlin.math.PI
+            else -> alpha4
+        }
+
+        if (alpha4 <= actualAlpha + deltaAngle && alpha4 >= actualAlpha - deltaAngle)
             return true
         val s1 = sign(actualAlpha - alpha1)
         if (s1 != sign(actualAlpha - alpha2) || s1 != sign(actualAlpha - alpha3) || s1 != sign(actualAlpha - alpha4))
