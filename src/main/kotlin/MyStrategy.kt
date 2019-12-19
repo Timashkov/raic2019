@@ -99,7 +99,7 @@ class MyStrategy {
                 } &&
                 game.lootBoxes.any { lootbox ->
                     lootbox.item is Item.HealthPack && routes.none {
-                        it.key != unit.id &&
+                        it.key != unit.id && units.any { unit -> unit.id == it.key } &&
                                 it.value.getTargetLootItem()?.position?.x == lootbox.position.x &&
                                 it.value.getTargetLootItem()?.position?.y == lootbox.position.y
                     }
@@ -113,7 +113,7 @@ class MyStrategy {
 
         if (game.lootBoxes.count { lootbox ->
                 lootbox.item is Item.HealthPack && routes.none {
-                    it.key != unit.id &&
+                    it.key != unit.id && units.any { unit -> unit.id == it.key } &&
                             it.value.getTargetLootItem()?.position?.x == lootbox.position.x &&
                             it.value.getTargetLootItem()?.position?.y == lootbox.position.y
                 }
@@ -147,7 +147,7 @@ class MyStrategy {
                                     unit.health < game.properties.unitMaxHealth * 3 / 4)
                             ) && game.lootBoxes.any { lootbox ->
                         lootbox.item is Item.HealthPack && routes.none {
-                            it.key != unit.id &&
+                            it.key != unit.id && units.any { unit -> unit.id == it.key } &&
                                     it.value.getTargetLootItem()?.position?.x == lootbox.position.x &&
                                     it.value.getTargetLootItem()?.position?.y == lootbox.position.y
                         }
@@ -156,7 +156,7 @@ class MyStrategy {
                         val targets1 = game.lootBoxes.filter { lootbox ->
                             lootbox.item is Item.HealthPack &&
                                     routes.none {
-                                        it.key != unit.id &&
+                                        it.key != unit.id && units.any { unit -> unit.id == it.key } &&
                                                 it.value.getTargetLootItem()?.position?.x == lootbox.position.x &&
                                                 it.value.getTargetLootItem()?.position?.y == lootbox.position.y
                                     } &&
@@ -173,7 +173,7 @@ class MyStrategy {
 
                         val targets2 = game.lootBoxes.filter { lootbox ->
                             lootbox.item is Item.HealthPack && routes.none {
-                                it.key != unit.id &&
+                                it.key != unit.id && units.any { unit -> unit.id == it.key } &&
                                         it.value.getTargetLootItem()?.position?.x == lootbox.position.x &&
                                         it.value.getTargetLootItem()?.position?.y == lootbox.position.y
                             }
@@ -207,7 +207,7 @@ class MyStrategy {
                             )
                         }
                         if (localRoute.isNotEmpty()) {
-                            for(item in game.lootBoxes){
+                            for (item in game.lootBoxes) {
                                 if (item.position.x.toInt() == localRoute[0].position.x && item.position.y.toInt() == localRoute[0].position.y)
                                     routes[unit.id]!!.setTargetLootItem(item)
                             }
@@ -239,7 +239,7 @@ class MyStrategy {
                             routes[unit.id]?.getNextPoint()
                         )
                         if (localRoute.isNotEmpty()) {
-                            for(item in game.lootBoxes){
+                            for (item in game.lootBoxes) {
                                 if (item.position.x.toInt() == localRoute[0].position.x && item.position.y.toInt() == localRoute[0].position.y)
                                     routes[unit.id]!!.setTargetLootItem(item)
                             }
@@ -259,7 +259,7 @@ class MyStrategy {
                             routes[unit.id]?.getNextPoint()
                         )
                         if (localRoute.isNotEmpty()) {
-                            for(item in game.lootBoxes){
+                            for (item in game.lootBoxes) {
                                 if (item.position.x.toInt() == localRoute[0].position.x && item.position.y.toInt() == localRoute[0].position.y)
                                     routes[unit.id]!!.setTargetLootItem(item)
                             }
@@ -276,6 +276,21 @@ class MyStrategy {
         }
 
         if (enemyIndex >= 5) {
+
+            routes[unit.id]!!.setNextPoint(
+                Node(
+                    position = Vec2Int(unit.position.x.toInt(), unit.position.y.toInt()),
+                    jumpTile = if (unit.jumpState.canJump && unit.jumpState.maxTime < game.properties.unitJumpTime) getJumpTile(
+                        unit.jumpState.maxTime,
+                        game
+                    ) else -1,
+                    boostJumpTile = if (unit.jumpState.canJump && !unit.jumpState.canCancel) getJumpTile(
+                        unit.jumpState.maxTime, game, true
+                    ) else -1,
+                    gen = 0,
+                    goingToEnemy = true
+                )
+            )
             enemyIndex = 0
             val enSquare = SquareObject(
                 pos = nearestEnemy?.position ?: Vec2Double(0.0, 0.0),
@@ -293,7 +308,7 @@ class MyStrategy {
                     debug,
                     game,
                     localRoute,
-                    routes[unit.id]?.getNextPoint()?.apply { goingToEnemy = true }
+                    routes[unit.id]?.getNextPoint()
                 )
                 localRoute.reverse()
                 routes[unit.id]!!.addRouteNodes(localRoute)
@@ -345,7 +360,8 @@ class MyStrategy {
             action.shoot = false
         } else {
             if (shootAllowed(unit, nearestEnemy, game, debug)) {
-                action.shoot = !canShutTeammate(unit, game, nearestEnemy)// isShootEffective(unit, nearestEnemy!!)
+                action.shoot =
+                    !canShutTeammate(unit, game, nearestEnemy, debug)// isShootEffective(unit, nearestEnemy!!)
 
                 enemyIndex++
 
@@ -370,7 +386,7 @@ class MyStrategy {
                 val en =
                     game.units.firstOrNull { it.playerId != unit.playerId && it.id != nearestEnemy?.id && it.health > 0 }
                 if (en != null && shootAllowed(unit, en, game, debug)) {
-                    action.shoot = !canShutTeammate(unit, game, en)// isShootEffective(unit, nearestEnemy!!)
+                    action.shoot = !canShutTeammate(unit, game, en, debug)// isShootEffective(unit, nearestEnemy!!)
 
                     enemyIndex++
 
@@ -644,7 +660,11 @@ class MyStrategy {
         )
             return true
 
-        if (target.isEnemy && (abs(node.position.x - target.pos.x) < 4 && abs(node.position.y - target.pos.y) < 4))
+        if (target.isEnemy &&
+            abs(node.position.x - target.pos.x) < 4 &&
+            abs(node.position.y - target.pos.y) < 4 &&
+            (abs(node.position.x - target.pos.x) > 2 || abs(node.position.y - target.pos.y) > 2)
+        )
             return true
         return false
     }
@@ -1079,14 +1099,14 @@ class MyStrategy {
         }
 
         val indexLeft = xl.toInt()
-        val indexRight = xr.toInt()
+        val indexRight = xr.toInt() + 1
         val indexBottom = yb.toInt()
         val indexTop = yt.toInt()
 
         for (i in if (unitCenter.x > enemyCenter.x) indexRight downTo indexLeft else indexLeft..indexRight) {
             for (j in indexBottom..indexTop) {
                 if (game.level.tiles[i][j].discriminant == Tile.WALL.discriminant) {
-                    if (xl.toInt() == xr.toInt() || yt.toInt() == yb.toInt() ||
+                    if ((yt.toInt() == yb.toInt() && j == yb.toInt()) ||
                         directrixTileCollision(
                             Vec2Double(
                                 i.toDouble(),
@@ -1097,7 +1117,8 @@ class MyStrategy {
                             enemyCenter,
                             unit.weapon!!.spread,
                             game.properties.weaponParams[unit.weapon!!.typ]?.bullet?.size
-                                ?: 0.0
+                                ?: 0.0,
+                            debug
                         )
                     /* + check for rocket and distances*/
                     ) {
@@ -1169,7 +1190,8 @@ class MyStrategy {
                             enemyCenter,
                             unit.weapon!!.spread,
                             game.properties.weaponParams[WeaponType.ROCKET_LAUNCHER]?.bullet?.size
-                                ?: 0.0
+                                ?: 0.0,
+                            debug
                         )
                     ) {
 
@@ -1194,7 +1216,7 @@ class MyStrategy {
         return true
     }
 
-    private fun canShutTeammate(unit: Unit, game: Game, aim: Unit?): Boolean {
+    private fun canShutTeammate(unit: Unit, game: Game, aim: Unit?, debug: Debug): Boolean {
         if (aim == null)
             return false
         val aimCenter =
@@ -1222,7 +1244,8 @@ class MyStrategy {
                     aimCenter,
                     unit.weapon!!.spread,
                     game.properties.weaponParams[unit.weapon!!.typ]?.bullet?.size
-                        ?: 0.0
+                        ?: 0.0,
+                    debug
                 )
             )
                 return true
@@ -1237,7 +1260,8 @@ class MyStrategy {
         unitCenter: Vec2Double,
         aimCenter: Vec2Double,
         deltaAngle: Double,
-        bulletSize: Double
+        bulletSize: Double,
+        debug: Debug
     ): Boolean {
 
         val bulletSqr = bulletSize * bulletSize
@@ -1250,6 +1274,8 @@ class MyStrategy {
         }
 
         val actualAlpha = atan2(aimCenter.y - unitCenter.y, aimCenter.x - unitCenter.x)
+
+//        debug.draw(CustomData.Log("spread + alpha $deltaAngle  , $actualAlpha"))
 
         val corner1 = Vec2Double(square.x - bulletSize / 2, square.y - bulletSize / 2)
         var alpha1 = atan2(corner1.y - unitCenter.y, corner1.x - unitCenter.x)
@@ -1371,6 +1397,7 @@ class Route {
 
     fun isEmpty() = routeNodes.isEmpty()
     fun clearRoute() {
+        prevPoint = null
         routeNodes.clear()
         targetLootItem = null
     }
@@ -1405,11 +1432,15 @@ class Route {
 
         // drawRoute(route[unit.id], debug)
 
-        return if (routeNodes.isNotEmpty())
+        return if (routeNodes.isNotEmpty()) {
             Vec2Double(
                 routeNodes[0].position.x + 0.5,
                 routeNodes[0].position.y.toDouble()
-            ) else null
+            )
+        } else {
+            clearRoute()
+            null
+        }
     }
 
     fun setPrevPosition(position: Vec2Double) {
@@ -1423,149 +1454,4 @@ class Route {
     fun setTargetLootItem(item: LootBox) {
         targetLootItem = item
     }
-
 }
-
-
-//    private fun buildPathForNearestWeapon2(
-//        unit: Unit,
-//        nearestWeapon: LootBox,
-//        game: Game,
-//        debug: Debug,
-//        route: ArrayList<Node>
-//    ): ArrayList<ProbablyAction>? {
-//
-//        val vel = abs(getVelocity(unit.position.x, nearestWeapon.position.x))
-//
-//        val nodes = LinkedBlockingQueue<ProbablyAction>()
-//
-//        var currentStep = route.firstOrNull { step ->
-//            step.x <= unit.position.x &&
-//                    step.x + 1 > unit.position.x &&
-//                    step.y <= unit.position.y && step.y + 1 > unit.position.y
-//        }
-//        var nextStep = if (currentStep != null && route.indexOf(currentStep) != route.size - 1) {
-//            route[route.indexOf(currentStep) + 1]
-//        } else null
-//
-//        for (i in 2 downTo 0) {
-//            if (nextStep != null && currentStep != null) {
-//                if (i == 0 && nextStep.x > currentStep.x) {
-//                    continue
-//                }
-//                if (i == 2 && nextStep.x < currentStep.x) {
-//                    continue
-//                }
-//            } else continue
-//            for (j in 0..2) {
-//
-//                if (j == 2 && currentStep.y <= nextStep.y && currentStep.x != nextStep.x)
-//                    continue
-//                if (j == 0 && currentStep.y >= nextStep.y && currentStep.x != nextStep.x)
-//                    continue
-//                val act = model.UnitAction().apply {
-//                    velocity = (i - 1) * vel
-//                    jump = j == 0
-//                    jumpDown = j == 2
-//                }
-//
-//                val pa = ProbablyAction(
-//                    act, getUnitMovement(
-//                        UnitMovement(
-//                            unit.position,
-//                            (unit.position.y - unit.position.y.toInt().toDouble()) < jumpPerTick
-//                        ),
-//                        unit.size, unit.id,
-//                        act, game
-//                    ), 0,
-//                    null
-//                )
-//                if (pa.probablyPositionAfterAction.pos.x != unit.position.x || pa.probablyPositionAfterAction.pos.y != unit.position.y)
-//                    nodes.add(pa)
-//            }
-//        }
-//
-//        var r: ProbablyAction? = null
-//        var c = 0
-//
-//        while (nodes.isNotEmpty() && r == null) {
-//            val n = nodes.poll()
-//            currentStep = route.firstOrNull { step ->
-//                step.x <= n.probablyPositionAfterAction.pos.x &&
-//                        step.x + 1 > n.probablyPositionAfterAction.pos.x &&
-//                        step.y <= n.probablyPositionAfterAction.pos.y && step.y + 1 > n.probablyPositionAfterAction.pos.y
-//            }
-//            nextStep = if (currentStep != null && route.indexOf(currentStep) != route.size - 1) {
-//                route[route.indexOf(currentStep) + 1]
-//            } else null
-//
-//            for (i in 2 downTo 0) {
-//                if (nextStep != null && currentStep != null) {
-//                    if (i < 2 && currentStep.x < nextStep.x) {
-//                        continue
-//                    }
-//                    if (i > 0 && currentStep.x > nextStep.x) {
-//                        continue
-//                    }
-//
-//                } else continue
-//
-//                for (j in 0..2) {
-//                    if (j == 2 && currentStep.y <= nextStep.y && currentStep.x != nextStep.x)
-//                        continue
-//                    if (j == 0 && currentStep.y >= nextStep.y && currentStep.x != nextStep.x)
-//                        continue
-//
-//                    if ((currentStep.x != nextStep.x || currentStep.y != nextStep.y) && i == 1 && j == 1) {
-//                        continue
-//                    }
-//                    val act = model.UnitAction().apply {
-//                        velocity = (i - 1) * vel
-//                        jump = j == 0
-//                        jumpDown = j == 2
-//                    }
-//
-//                    val pa = ProbablyAction(
-//                        act, getUnitMovement(
-//                            n.probablyPositionAfterAction, unit.size,
-//                            unit.id, act, game
-//                        ), n.currentTick + 1, n
-//                    )
-//                    if (nodes.none { it.probablyPositionAfterAction.pos.x == pa.probablyPositionAfterAction.pos.x && it.probablyPositionAfterAction.pos.y == pa.probablyPositionAfterAction.pos.y })
-//                        nodes.add(pa)
-//                    if (objectsCollisionDetected(
-//                            pa.probablyPositionAfterAction.pos,
-//                            nearestWeapon.position,
-//                            unit.size,
-//                            nearestWeapon.size
-//                        )
-//                    )
-//                        r = pa
-//                }
-//            }
-//        }
-//        nodes.clear()
-//
-//        r?.let {
-//            val result = ArrayList<ProbablyAction>()
-//
-//            var qq = it
-//            do {
-//                result.add(qq)
-//                debug.draw(
-//                    CustomData.Rect(
-//                        Vec2Float(
-//                            qq.probablyPositionAfterAction.pos.x.toFloat() + 0.4f,
-//                            qq.probablyPositionAfterAction.pos.y.toFloat() + 0.4f
-//                        ),
-//                        Vec2Float(0.2f, 0.2f),
-//                        ColorFloat(111f, 111f, 111f, 255f)
-//                    )
-//                )
-//                qq = qq.parentPA ?: return@let
-//            } while (qq.parentPA != null)
-//            return result
-//        }
-//
-//        return null
-//    }
