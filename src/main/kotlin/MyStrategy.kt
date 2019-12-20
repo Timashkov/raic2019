@@ -170,7 +170,6 @@ class MyStrategy {
                                 false
                             )
                         }
-
                         val targets2 = game.lootBoxes.filter { lootbox ->
                             lootbox.item is Item.HealthPack && routes.none {
                                 it.key != unit.id && units.any { unit -> unit.id == it.key } &&
@@ -1106,7 +1105,7 @@ class MyStrategy {
         for (i in if (unitCenter.x > enemyCenter.x) indexRight downTo indexLeft else indexLeft..indexRight) {
             for (j in indexBottom..indexTop) {
                 if (game.level.tiles[i][j].discriminant == Tile.WALL.discriminant) {
-                    if ((yt.toInt() == yb.toInt() && j == yb.toInt()) ||
+                    if ((yt.toInt() == yb.toInt() && j == yb.toInt() && i > xl && i < (xr - 1)) ||
                         directrixTileCollision(
                             Vec2Double(
                                 i.toDouble(),
@@ -1200,6 +1199,9 @@ class MyStrategy {
                                             dam >= nearestEnemy.health && nearestEnemy.health < unit.health)
 
                         )
+                            continue
+
+                        if (game.units.count { it.playerId != unit.playerId && it.health > 0 } < game.units.count { it.playerId == unit.playerId && it.health > 0 })
                             continue
                         debug.draw(
                             CustomData.Rect(
