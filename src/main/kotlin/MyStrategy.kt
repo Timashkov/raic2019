@@ -369,8 +369,7 @@ class MyStrategy {
             action.shoot = false
         } else {
             if (shootAllowed(unit, nearestEnemy, game, debug)) {
-                action.shoot =
-                    false// !canShutTeammate(unit, game, nearestEnemy, debug)// isShootEffective(unit, nearestEnemy!!)
+                action.shoot = !canShutTeammate(unit, game, nearestEnemy, debug)// isShootEffective(unit, nearestEnemy!!)
 
                 enemyIndex++
 
@@ -395,8 +394,7 @@ class MyStrategy {
                 val en =
                     game.units.firstOrNull { it.playerId != unit.playerId && it.id != nearestEnemy?.id && it.health > 0 }
                 if (en != null && shootAllowed(unit, en, game, debug)) {
-                    action.shoot =
-                        false//!canShutTeammate(unit, game, en, debug)// isShootEffective(unit, nearestEnemy!!)
+                    action.shoot = !canShutTeammate(unit, game, en, debug)// isShootEffective(unit, nearestEnemy!!)
 
                     enemyIndex++
 
