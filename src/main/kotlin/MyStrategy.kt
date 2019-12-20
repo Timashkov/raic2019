@@ -317,6 +317,16 @@ class MyStrategy {
         // drawRoute(route[unit.id], debug)
 
         var targetPos = routes[unit.id]?.getNextStep(unit, game)
+        targetPos?.let {
+            val tli = routes[unit.id]?.getTargetLootItem() ?: return@let
+            if (tli.position.x.toInt() == it.x.toInt() && tli.position.y.toInt() == it.y.toInt()) {
+                if (it.x.toInt() > 0 && game.level.tiles[it.x.toInt() - 1][it.y.toInt()].discriminant == Tile.JUMP_PAD.discriminant)
+                    it.apply { x += 0.2 }
+
+                if (it.x.toInt() < 39 && game.level.tiles[it.x.toInt() + 1][it.y.toInt()].discriminant == Tile.JUMP_PAD.discriminant)
+                    it.apply { x -= 0.2 }
+            }
+        }
         if (targetPos == null) {
             targetPos = if (game.units.any { it.playerId == unit.playerId && it.id > unit.id }) {
                 nearestEnemy?.position ?: Vec2Double(0.5, 0.5)
@@ -347,9 +357,9 @@ class MyStrategy {
 
         action.velocity = getVelocity(unit.position.x, targetPos.x)
         action.jump =
-            targetPos.y > routes[unit.id]?.getPrevPoint()?.position?.y?.toDouble() ?: 0.0 || targetPos.y > unit.position.y
+            targetPos.y > routes[unit.id]?.getPrevPoint()?.position?.y?.toDouble() ?: targetPos.y || targetPos.y > unit.position.y
         action.jumpDown =
-            targetPos.y < routes[unit.id]?.getPrevPoint()?.position?.y?.toDouble() ?: 31.0 && targetPos.y < unit.position.y - jumpPerTick
+            targetPos.y < routes[unit.id]?.getPrevPoint()?.position?.y?.toDouble() ?: targetPos.y && targetPos.y < unit.position.y - jumpPerTick
 
         action.aim = aim
 //        action.reload = false
@@ -360,7 +370,7 @@ class MyStrategy {
         } else {
             if (shootAllowed(unit, nearestEnemy, game, debug)) {
                 action.shoot =
-                    !canShutTeammate(unit, game, nearestEnemy, debug)// isShootEffective(unit, nearestEnemy!!)
+                    false// !canShutTeammate(unit, game, nearestEnemy, debug)// isShootEffective(unit, nearestEnemy!!)
 
                 enemyIndex++
 
@@ -385,7 +395,8 @@ class MyStrategy {
                 val en =
                     game.units.firstOrNull { it.playerId != unit.playerId && it.id != nearestEnemy?.id && it.health > 0 }
                 if (en != null && shootAllowed(unit, en, game, debug)) {
-                    action.shoot = !canShutTeammate(unit, game, en, debug)// isShootEffective(unit, nearestEnemy!!)
+                    action.shoot =
+                        false//!canShutTeammate(unit, game, en, debug)// isShootEffective(unit, nearestEnemy!!)
 
                     enemyIndex++
 
@@ -1105,7 +1116,7 @@ class MyStrategy {
         for (i in if (unitCenter.x > enemyCenter.x) indexRight downTo indexLeft else indexLeft..indexRight) {
             for (j in indexBottom..indexTop) {
                 if (game.level.tiles[i][j].discriminant == Tile.WALL.discriminant) {
-                    if ((yt.toInt() == yb.toInt() && j == yb.toInt() && i > xl && i < (xr - 1)) ||
+                    if (xl.toInt() == xr.toInt() || yt.toInt() == yb.toInt() ||
                         directrixTileCollision(
                             Vec2Double(
                                 i.toDouble(),
